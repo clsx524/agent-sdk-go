@@ -84,6 +84,7 @@ Check out the [examples](cmd/examples) directory for more detailed examples:
 - [Guardrails](cmd/examples/guardrails): Adding safety mechanisms
 - [Embedding](cmd/examples/embedding): Working with embeddings
 - [Context](cmd/examples/context): Managing context in conversations
+- [Task Execution](cmd/examples/task_execution): Tasks execution
 
 ## Documentation
 
@@ -96,6 +97,7 @@ Check out the [examples](cmd/examples) directory for more detailed examples:
 - [Guardrails](docs/guardrails.md): Safety and content filtering
 - [Environment Variables](docs/environment_variables.md): Configuration options
 - [Multitenancy](docs/multitenancy.md): Supporting multiple organizations
+- [Task](docs/task.md): Tasks execution
 
 ## Architecture
 
