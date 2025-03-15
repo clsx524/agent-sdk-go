@@ -78,11 +78,12 @@ Check out the [examples](cmd/examples) directory for more detailed examples:
 - [Simple Agent](cmd/examples/simple_agent): Basic agent setup
 - [LLM Providers](cmd/examples/llm): Using different LLM providers
 - [Memory Systems](cmd/examples/memory): Working with different memory systems
-- [Tools](cmd/examples/tools): Adding custom tools to your agent
 - [Vector Stores](cmd/examples/vectorstore): Integrating with vector databases
 - [Tracing](cmd/examples/tracing): Adding observability to your agent
 - [Orchestration](cmd/examples/orchestration): Coordinating multiple agents
 - [Guardrails](cmd/examples/guardrails): Adding safety mechanisms
+- [Embedding](cmd/examples/embedding): Working with embeddings
+- [Context](cmd/examples/context): Managing context in conversations
 
 ## Documentation
 
