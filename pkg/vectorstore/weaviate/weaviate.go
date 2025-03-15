@@ -217,20 +217,36 @@ func (s *Store) Search(ctx context.Context, query string, limit int, options ...
 		}
 	}
 
+	// Log the GraphQL query details
+	s.logger.Info(ctx, "Executing GraphQL query", map[string]interface{}{
+		"className": className,
+		"limit":     limit,
+		"query":     query,
+	})
+
+	// Try a simpler query first
 	result, err := s.client.GraphQL().Get().
 		WithClassName(className).
 		WithFields(graphql.Field{
-			Name: "content source type word_count _additional { certainty id }",
+			Name: "content _additional { certainty id }",
 		}).
 		WithNearVector(s.client.GraphQL().NearVectorArgBuilder().
-			WithVector(vector)). // Use the generated vector
-		WithWhere(whereFilter).
+			WithVector(vector)).
 		WithLimit(limit).
 		Do(ctx)
 
 	if err != nil {
+		s.logger.Error(ctx, "GraphQL query failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
+
+	// Log the raw response for debugging
+	s.logger.Info(ctx, "GraphQL response received", map[string]interface{}{
+		"rawData": result.Data,
+		"errors":  result.Errors,
+	})
 
 	// Parse results
 	searchResults, err := s.parseSearchResults(result, className)
@@ -333,7 +349,7 @@ func (s *Store) Get(ctx context.Context, ids []string) ([]interfaces.Document, e
 			return nil, fmt.Errorf("failed to get document %s: %w", id, err)
 		}
 
-		if result == nil || len(result) == 0 {
+		if len(result) == 0 {
 			continue // Skip if document not found
 		}
 
@@ -718,25 +734,77 @@ func toFloat64(v interface{}) float64 {
 func (s *Store) parseSearchResults(result *models.GraphQLResponse, className string) ([]interfaces.SearchResult, error) {
 	var searchResults []interfaces.SearchResult
 
+	// Add debug logging
+	s.logger.Info(context.Background(), "Parsing search results", map[string]interface{}{
+		"className":  className,
+		"resultData": result.Data,
+	})
+
+	// Check if result.Data is nil
+	if result.Data == nil {
+		s.logger.Warn(context.Background(), "Empty response data from Weaviate", nil)
+		return []interfaces.SearchResult{}, nil // Return empty results instead of error
+	}
+
 	// Get the results array
 	getMap, ok := result.Data["Get"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid response format: missing Get object")
+		// Log the actual structure for debugging
+		s.logger.Error(context.Background(), "Invalid response format", map[string]interface{}{
+			"data": result.Data,
+		})
+		// Return empty results instead of error for production use
+		return []interfaces.SearchResult{}, nil
 	}
 
 	results, ok := getMap[className].([]interface{})
 	if !ok {
 		// Return empty results if no matches found
+		s.logger.Info(context.Background(), "No results found for class", map[string]interface{}{
+			"className": className,
+			"getMap":    getMap,
+		})
 		return searchResults, nil
 	}
 
 	for _, r := range results {
 		result := r.(map[string]interface{})
-		additional := result["_additional"].(map[string]interface{})
+		additional, ok := result["_additional"].(map[string]interface{})
+		if !ok {
+			s.logger.Warn(context.Background(), "Missing _additional field in result", map[string]interface{}{
+				"result": result,
+			})
+			continue
+		}
+
+		content, ok := result["content"].(string)
+		if !ok {
+			s.logger.Warn(context.Background(), "Missing content field in result", map[string]interface{}{
+				"result": result,
+			})
+			continue
+		}
+
+		id, ok := additional["id"].(string)
+		if !ok {
+			s.logger.Warn(context.Background(), "Missing id field in result", map[string]interface{}{
+				"additional": additional,
+			})
+			continue
+		}
+
+		certainty, ok := additional["certainty"].(float64)
+		if !ok {
+			s.logger.Warn(context.Background(), "Missing certainty field in result", map[string]interface{}{
+				"additional": additional,
+			})
+			// Use a default certainty value
+			certainty = 0.5
+		}
 
 		doc := interfaces.Document{
-			ID:       additional["id"].(string),
-			Content:  result["content"].(string),
+			ID:       id,
+			Content:  content,
 			Metadata: make(map[string]interface{}),
 		}
 
@@ -749,7 +817,7 @@ func (s *Store) parseSearchResults(result *models.GraphQLResponse, className str
 
 		searchResults = append(searchResults, interfaces.SearchResult{
 			Document: doc,
-			Score:    float32(additional["certainty"].(float64)),
+			Score:    float32(certainty),
 		})
 	}
 

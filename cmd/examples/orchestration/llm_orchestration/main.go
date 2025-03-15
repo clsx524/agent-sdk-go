@@ -59,6 +59,28 @@ func main() {
 	orchestrator := orchestration.NewLLMOrchestrator(registry, openaiClient)
 	orchestrator.WithLogger(logger)
 
+	// Create a custom orchestrator that wraps the original one to enforce summary length
+	customExecute := func(ctx context.Context, query string) (string, error) {
+		// Call the original Execute method
+		response, err := orchestrator.Execute(ctx, query)
+		if err != nil {
+			return "", err
+		}
+
+		// Check if the response is too long
+		if len(response) > 2000 {
+			logger.Warn(ctx, "Response is very long, truncating for better readability", map[string]interface{}{
+				"original_length": len(response),
+				"new_length":      2000,
+			})
+
+			// Truncate and add a note
+			response = response[:2000] + "...\n\n[Note: This response has been automatically truncated for better readability. The full response was longer than expected.]"
+		}
+
+		return response, nil
+	}
+
 	// Create context with a default organization ID and conversation ID
 	logger.Info(ctx, "Setting up context with organization ID and conversation ID", nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -88,24 +110,34 @@ func main() {
 		}
 
 		// Execute the query
-		fmt.Println("\nProcessing your request...")
 		logger.Info(ctx, "Processing query", map[string]interface{}{"query": query})
 		startTime := time.Now()
 
-		response, err := orchestrator.Execute(ctx, query)
+		// Use our custom execute function instead of the original
+		response, err := customExecute(ctx, query)
 		if err != nil {
 			logger.Error(ctx, "Error executing query", map[string]interface{}{"error": err.Error()})
-			fmt.Printf("Error: %v\n", err)
 			continue
 		}
 
 		// Print the result
 		duration := time.Since(startTime).Seconds()
 		logger.Info(ctx, "Query processed successfully", map[string]interface{}{"duration_seconds": duration})
-		fmt.Printf("\nResponse (took %.2f seconds):\n%s\n", duration, response)
+
+		// Truncate the response for logging purposes
+		truncatedResponse := response
+		if len(response) > 100 {
+			truncatedResponse = response[:100] + "..."
+		}
+		logger.Info(ctx, "Response", map[string]interface{}{"response_length": len(response), "response_preview": truncatedResponse})
+
+		// Print the full response to the console for the user
+		fmt.Println("\nResponse:")
+		fmt.Println(response)
 	}
 }
 
+// Create summarization agent with stronger constraints
 func createAndRegisterAgents(registry *orchestration.AgentRegistry, llm interfaces.LLM, logger logging.Logger) {
 	// Create research agent
 	researchAgent, err := agent.NewAgent(
@@ -148,11 +180,23 @@ func createAndRegisterAgents(registry *orchestration.AgentRegistry, llm interfac
 		logger.Info(context.Background(), "Creative agent registered", nil)
 	}
 
-	// Create summarization agent
+	// Create summarization agent with stronger constraints
 	summaryAgent, err := agent.NewAgent(
 		agent.WithLLM(llm),
 		agent.WithMemory(memory.NewConversationBuffer()),
-		agent.WithSystemPrompt("You are a summarization agent specialized in condensing information. You excel at extracting key points and creating concise summaries."),
+		agent.WithSystemPrompt(`You are a summarization agent specialized in condensing information. 
+You excel at extracting key points and creating concise summaries. 
+
+CRITICAL INSTRUCTIONS:
+1. Your summaries MUST be significantly shorter than the original content
+2. NEVER exceed 70% of the original content length
+3. Focus ONLY on the most important information
+4. Be extremely concise and to the point
+5. Avoid unnecessary details, examples, or explanations
+6. Use bullet points where appropriate to save space
+7. If you find yourself writing a long summary, stop and make it shorter
+
+Remember: A good summary is brief but comprehensive. Quality over quantity.`),
 	)
 	if err != nil {
 		logger.Error(context.Background(), "Error creating summarization agent", map[string]interface{}{"error": err.Error()})

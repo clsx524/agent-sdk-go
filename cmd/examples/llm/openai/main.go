@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/llm"
@@ -40,7 +39,7 @@ func main() {
 		logger.Error(ctx, "Failed to generate", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
-	fmt.Printf("Generated text: %s\n\n", resp)
+	logger.Info(ctx, "Generated text", map[string]interface{}{"text": resp})
 
 	// Test chat
 	messages := []llm.Message{
@@ -59,5 +58,5 @@ func main() {
 		logger.Error(ctx, "Failed to chat", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
-	fmt.Printf("Chat response: %s\n", resp)
+	logger.Info(ctx, "Chat response", map[string]interface{}{"text": resp})
 }

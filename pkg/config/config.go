@@ -153,7 +153,7 @@ func LoadFromEnv() *Config {
 	// VectorStore configuration
 	config.VectorStore.Weaviate.URL = getEnv("WEAVIATE_URL", "")
 	config.VectorStore.Weaviate.APIKey = getEnv("WEAVIATE_API_KEY", "")
-	config.VectorStore.Weaviate.Scheme = getEnv("WEAVIATE_SCHEME", "http")
+	config.VectorStore.Weaviate.Scheme = getEnv("WEAVIATE_SCHEME", "https")
 	config.VectorStore.Weaviate.Host = getEnv("WEAVIATE_HOST", "localhost:8080")
 	config.VectorStore.Weaviate.ClassName = getEnv("WEAVIATE_CLASS_NAME", "Document")
 

@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/config"
 	"github.com/Ingenimax/agent-sdk-go/pkg/embedding"
@@ -22,8 +22,34 @@ func main() {
 	// Load configuration
 	cfg := config.Get()
 
+	// Check if OpenAI API key is set
+	if cfg.LLM.OpenAI.APIKey == "" {
+		logger.Error(ctx, "OpenAI API key is not set. Please set the OPENAI_API_KEY environment variable.", nil)
+		return
+	}
+
 	// Initialize the OpenAIEmbedder with the API key and model from config
+	logger.Info(ctx, "Initializing OpenAI embedder", map[string]interface{}{
+		"model": cfg.LLM.OpenAI.EmbeddingModel,
+	})
 	embedder := embedding.NewOpenAIEmbedder(cfg.LLM.OpenAI.APIKey, cfg.LLM.OpenAI.EmbeddingModel)
+
+	// Create a more explicit configuration for Weaviate
+	logger.Info(ctx, "Initializing Weaviate client", map[string]interface{}{
+		"host":   cfg.VectorStore.Weaviate.Host,
+		"scheme": cfg.VectorStore.Weaviate.Scheme,
+	})
+
+	// Check if Weaviate host is set
+	if cfg.VectorStore.Weaviate.Host == "" {
+		logger.Error(ctx, "Weaviate host is not set. Please set the WEAVIATE_HOST environment variable.", nil)
+		return
+	}
+
+	// Check if Weaviate API key is set for cloud instances
+	if cfg.VectorStore.Weaviate.APIKey == "" && cfg.VectorStore.Weaviate.Host != "localhost:8080" {
+		logger.Warn(ctx, "Weaviate API key is not set. This may be required for cloud instances.", nil)
+	}
 
 	store := weaviate.New(
 		&interfaces.VectorStoreConfig{
@@ -65,28 +91,45 @@ func main() {
 		docs[idx].Vector = vector
 	}
 
-	fmt.Println("Storing documents with embeddings...")
+	logger.Info(ctx, "Storing documents with embeddings...", nil)
 	if err := store.Store(ctx, docs); err != nil {
 		logger.Error(ctx, "Failed to store documents", map[string]interface{}{"error": err.Error()})
 		return
 	}
 
-	fmt.Println("Searching for 'fox jumps'...")
+	// Add a delay to ensure documents are indexed
+	logger.Info(ctx, "Waiting for documents to be indexed...", nil)
+	time.Sleep(2 * time.Second)
+
+	logger.Info(ctx, "Searching for 'fox jumps'...", nil)
 	results, err := store.Search(ctx, "fox jumps", 5, interfaces.WithEmbedding(true))
 	if err != nil {
-		logger.Error(ctx, "Search failed", map[string]interface{}{"error": err.Error()})
-		return
-	}
+		logger.Error(ctx, "Search failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 
-	if len(results) == 0 {
-		fmt.Println("No results found with embedding search.")
-	} else {
-		fmt.Println("Search results:")
-		for _, r := range results {
-			fmt.Printf("- %s (score: %.2f)\n", r.Document.Content, r.Score)
+		// Try a different search approach as fallback
+		logger.Info(ctx, "Trying alternative search approach...", nil)
+		results, err = store.Search(ctx, "fox", 5, interfaces.WithEmbedding(true))
+		if err != nil {
+			logger.Error(ctx, "Alternative search also failed", map[string]interface{}{"error": err.Error()})
+
+			// Continue with cleanup even if search failed
+			logger.Info(ctx, "Proceeding to cleanup...", nil)
+			goto cleanup
 		}
 	}
 
+	if len(results) == 0 {
+		logger.Info(ctx, "No results found with embedding search.", nil)
+	} else {
+		logger.Info(ctx, "Search results:", map[string]interface{}{"results": results})
+		for _, r := range results {
+			logger.Info(ctx, "Search result", map[string]interface{}{"result": r})
+		}
+	}
+
+cleanup:
 	// Cleanup
 	var ids []string
 	for _, doc := range docs {
@@ -96,5 +139,5 @@ func main() {
 		logger.Error(ctx, "Cleanup failed", map[string]interface{}{"error": err.Error()})
 		return
 	}
-	fmt.Println("Cleanup successful")
+	logger.Info(ctx, "Cleanup successful", nil)
 }

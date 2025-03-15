@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/agent"
@@ -104,7 +106,13 @@ func main() {
 		// Get user input
 		fmt.Print("\nEnter your query (or 'exit' to quit): ")
 		var query string
-		fmt.Scanln(&query)
+		reader := bufio.NewReader(os.Stdin)
+		query, inputErr := reader.ReadString('\n')
+		if inputErr != nil {
+			logger.Error(ctx, "Error reading input", map[string]interface{}{"error": inputErr.Error()})
+			continue
+		}
+		query = strings.TrimSpace(query)
 
 		if query == "exit" {
 			logger.Info(ctx, "User requested exit", nil)
@@ -116,15 +124,11 @@ func main() {
 			"query": query,
 		})
 		logger.Info(queryCtx, "Processing query", map[string]interface{}{"query": query})
-
-		// Execute the query
-		fmt.Println("\nProcessing your request...")
 		startTime := time.Now()
 
 		response, err := agent.Run(queryCtx, query)
 		if err != nil {
 			logger.Error(queryCtx, "Error executing query", map[string]interface{}{"error": err.Error()})
-			fmt.Printf("Error: %v\n", err)
 			otelTracer.EndSpan(querySpan, err)
 			continue
 		}
@@ -132,7 +136,7 @@ func main() {
 		// Print the result
 		duration := time.Since(startTime).Seconds()
 		logger.Info(queryCtx, "Query processed successfully", map[string]interface{}{"duration_seconds": duration})
-		fmt.Printf("\nResponse (took %.2f seconds):\n%s\n", duration, response)
+		logger.Info(queryCtx, "Response", map[string]interface{}{"response": response})
 
 		// End the query span
 		otelTracer.EndSpan(querySpan, nil)

@@ -29,7 +29,8 @@ func (m *LLMMiddleware) Generate(ctx context.Context, prompt string, options map
 	}
 
 	// Call the underlying LLM
-	response, err := m.llm.Generate(ctx, processedPrompt, nil)
+	// Pass an empty slice of options instead of nil to avoid nil pointer dereference
+	response, err := m.llm.Generate(ctx, processedPrompt, []interfaces.GenerateOption{}...)
 	if err != nil {
 		return "", err
 	}

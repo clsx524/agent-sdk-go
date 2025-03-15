@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/Ingenimax/agent-sdk-go/pkg/agent"
 	"github.com/Ingenimax/agent-sdk-go/pkg/interfaces"
 	"github.com/Ingenimax/agent-sdk-go/pkg/llm/openai"
+	"github.com/Ingenimax/agent-sdk-go/pkg/logging"
 	"github.com/Ingenimax/agent-sdk-go/pkg/memory"
 	"github.com/Ingenimax/agent-sdk-go/pkg/multitenancy"
 	"github.com/Ingenimax/agent-sdk-go/pkg/orchestration"
@@ -23,26 +23,36 @@ import (
 type userIDKey struct{}
 
 func main() {
+	// Create a logger with debug level
+	baseLogger := logging.New()
+	debugOption := logging.WithLevel("debug")
+	debugOption(baseLogger)
+	logger := baseLogger
+
+	// Create context
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
 	// Check for required API key
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		fmt.Println("Error: OPENAI_API_KEY environment variable is not set.")
-		fmt.Println("Please set it with: export OPENAI_API_KEY=your_openai_api_key")
+		logger.Error(ctx, "OPENAI_API_KEY environment variable is not set", nil)
+		logger.Info(ctx, "Please set it with: export OPENAI_API_KEY=your_openai_api_key", nil)
 		os.Exit(1)
 	}
 
 	// Create LLM client
-	openaiClient := openai.NewClient(apiKey)
+	openaiClient := openai.NewClient(apiKey, openai.WithLogger(logger))
 
 	// Test the API key with a simple query
-	fmt.Println("Testing OpenAI API key...")
-	_, err := openaiClient.Generate(context.Background(), "Hello")
+	logger.Info(ctx, "Testing OpenAI API key...", nil)
+	_, err := openaiClient.Generate(ctx, "Hello")
 	if err != nil {
-		fmt.Printf("Error: Failed to validate OpenAI API key: %v\n", err)
-		fmt.Println("Please check that your API key is valid and has sufficient quota.")
+		logger.Error(ctx, "Failed to validate OpenAI API key", map[string]interface{}{"error": err.Error()})
+		logger.Info(ctx, "Please check that your API key is valid and has sufficient quota.", nil)
 		os.Exit(1)
 	}
-	fmt.Println("API key is valid!")
+	logger.Info(ctx, "API key is valid!", nil)
 
 	// Create agent registry
 	registry := orchestration.NewAgentRegistry()
@@ -50,7 +60,7 @@ func main() {
 	// Create general agent
 	generalAgent, err := createGeneralAgent(openaiClient)
 	if err != nil {
-		fmt.Printf("Failed to create general agent: %v\n", err)
+		logger.Error(ctx, "Failed to create general agent", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 	registry.Register("general", generalAgent)
@@ -58,7 +68,7 @@ func main() {
 	// Create research agent
 	researchAgent, err := createResearchAgent(openaiClient)
 	if err != nil {
-		fmt.Printf("Failed to create research agent: %v\n", err)
+		logger.Error(ctx, "Failed to create research agent", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 	registry.Register("research", researchAgent)
@@ -66,20 +76,18 @@ func main() {
 	// Create math agent
 	mathAgent, err := createMathAgent(openaiClient)
 	if err != nil {
-		fmt.Printf("Failed to create math agent: %v\n", err)
+		logger.Error(ctx, "Failed to create math agent", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 	registry.Register("math", mathAgent)
 
 	// Create router
 	router := orchestration.NewLLMRouter(openaiClient)
+	router.WithLogger(logger)
 
 	// Create orchestrator
 	orchestrator := orchestration.NewOrchestrator(registry, router)
-
-	// Create context
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+	orchestrator.WithLogger(logger)
 
 	// Add required IDs to context
 	ctx = multitenancy.WithOrgID(ctx, "default-org")
@@ -89,7 +97,7 @@ func main() {
 	// Handle user queries
 	for {
 		// Get user input
-		fmt.Print("\nEnter your query (or 'exit' to quit): ")
+		logger.Info(ctx, "Enter your query (or 'exit' to quit):", nil)
 		var query string
 		// Use bufio.NewReader to read the entire line including spaces
 		reader := bufio.NewReader(os.Stdin)
@@ -110,32 +118,34 @@ func main() {
 		}
 
 		// Handle the request
-		fmt.Println("\nProcessing your request...")
+		logger.Info(ctx, "Processing your request...", nil)
 		result, err := orchestrator.HandleRequest(ctx, query, routingContext)
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			logger.Error(ctx, "Error processing request", map[string]interface{}{"error": err.Error()})
 
 			// Check for common error types and provide helpful messages
 			errStr := err.Error()
 			if strings.Contains(errStr, "401 Unauthorized") {
-				fmt.Println("\nAPI key error detected. Please check that:")
-				fmt.Println("1. Your OpenAI API key is correctly set in the environment")
-				fmt.Println("2. The API key is valid and not expired")
-				fmt.Println("3. Your account has sufficient credits")
-				fmt.Println("\nYou can verify your API key with: echo $OPENAI_API_KEY")
+				logger.Info(ctx, "API key error detected. Please check that:", nil)
+				logger.Info(ctx, "1. Your OpenAI API key is correctly set in the environment", nil)
+				logger.Info(ctx, "2. The API key is valid and not expired", nil)
+				logger.Info(ctx, "3. Your account has sufficient credits", nil)
+				logger.Info(ctx, "You can verify your API key with: echo $OPENAI_API_KEY", nil)
 			} else if strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "timeout") {
-				fmt.Println("\nThe request timed out. This could be due to:")
-				fmt.Println("1. OpenAI API service being slow or unavailable")
-				fmt.Println("2. A complex query requiring too much processing time")
-				fmt.Println("3. Network connectivity issues")
+				logger.Info(ctx, "The request timed out. This could be due to:", nil)
+				logger.Info(ctx, "1. OpenAI API service being slow or unavailable", nil)
+				logger.Info(ctx, "2. A complex query requiring too much processing time", nil)
+				logger.Info(ctx, "3. Network connectivity issues", nil)
 			}
 
 			continue
 		}
 
 		// Print the result
-		fmt.Printf("\nAgent: %s\n", result.AgentID)
-		fmt.Printf("Response: %s\n", result.Response)
+		logger.Info(ctx, "Agent response", map[string]interface{}{
+			"agent_id": result.AgentID,
+			"response": result.Response,
+		})
 	}
 }
 
@@ -149,6 +159,18 @@ func createGeneralAgent(llm interfaces.LLM) (*agent.Agent, error) {
 		agent.WithMemory(mem),
 		agent.WithSystemPrompt(`You are a helpful general-purpose assistant. You can answer questions on a wide range of topics.
 If you encounter a question that requires specialized knowledge in research or mathematics, you should hand off to a specialized agent.
+
+Hand off to the research agent for questions that:
+- Require up-to-date information or facts
+- Need detailed information about specific topics
+- Would benefit from web searches or data retrieval
+- Ask about current events, statistics, or factual information
+
+Hand off to the math agent for questions that:
+- Involve calculations of any kind
+- Require solving equations or mathematical problems
+- Deal with financial calculations, interest rates, or statistics
+- Need precise numerical answers
 
 To hand off to the research agent, respond with: [HANDOFF:research:needs specialized research]
 To hand off to the math agent, respond with: [HANDOFF:math:needs mathematical calculation]
@@ -183,6 +205,12 @@ func createResearchAgent(llm interfaces.LLM) (*agent.Agent, error) {
 You have access to search tools to help you find information.
 
 If you encounter a question that requires mathematical calculation, you should hand off to the math agent.
+This includes questions about:
+- Calculating interest, compound interest, or financial calculations
+- Solving equations or algebraic problems
+- Statistical analysis or probability calculations
+- Geometric calculations or any other mathematical operations
+
 To hand off to the math agent, respond with: [HANDOFF:math:needs mathematical calculation]
 
 Otherwise, use your tools to research and provide accurate information to the user.`),

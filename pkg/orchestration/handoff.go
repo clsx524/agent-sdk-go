@@ -9,6 +9,7 @@ import (
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/agent"
 	"github.com/Ingenimax/agent-sdk-go/pkg/interfaces"
+	"github.com/Ingenimax/agent-sdk-go/pkg/logging"
 )
 
 // HandoffRequest represents a request to hand off to another agent
@@ -76,6 +77,7 @@ func (r *AgentRegistry) List() map[string]*agent.Agent {
 type Orchestrator struct {
 	registry *AgentRegistry
 	router   Router
+	logger   logging.Logger
 }
 
 // Router determines which agent should handle a request
@@ -123,18 +125,30 @@ func contains(s, substr string) bool {
 
 // LLMRouter uses an LLM to determine which agent should handle a request
 type LLMRouter struct {
-	llm interfaces.LLM
+	llm    interfaces.LLM
+	logger logging.Logger
 }
 
 // NewLLMRouter creates a new LLM router
 func NewLLMRouter(llm interfaces.LLM) *LLMRouter {
 	return &LLMRouter{
-		llm: llm,
+		llm:    llm,
+		logger: logging.New(), // Default logger
 	}
+}
+
+// WithLogger sets the logger for the router
+func (r *LLMRouter) WithLogger(logger logging.Logger) *LLMRouter {
+	r.logger = logger
+	return r
 }
 
 // Route determines which agent should handle a request
 func (r *LLMRouter) Route(ctx context.Context, query string, context map[string]interface{}) (string, error) {
+	r.logger.Debug(ctx, "Routing query", map[string]interface{}{
+		"query": query,
+	})
+
 	// Create a prompt for the LLM
 	prompt := fmt.Sprintf(`You are a router that determines which specialized agent should handle a user query.
 Available agents:
@@ -144,19 +158,37 @@ User query: %s
 
 Respond with only the ID of the agent that should handle this query.`, formatAgents(context["agents"].(map[string]string)), query)
 
+	r.logger.Debug(ctx, "Generated routing prompt", map[string]interface{}{
+		"prompt": prompt,
+	})
+
 	// Generate a response
-	response, err := r.llm.Generate(ctx, prompt, nil)
+	response, err := r.llm.Generate(ctx, prompt)
 	if err != nil {
+		r.logger.Error(ctx, "Failed to generate routing response", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return "", fmt.Errorf("failed to generate response: %w", err)
 	}
 
 	// Clean up the response
 	response = strings.TrimSpace(response)
+	r.logger.Debug(ctx, "Received routing response", map[string]interface{}{
+		"raw_response": response,
+	})
 
 	// Validate the response
 	if _, ok := context["agents"].(map[string]string)[response]; !ok {
+		r.logger.Error(ctx, "Invalid agent ID returned by router", map[string]interface{}{
+			"agent_id": response,
+		})
 		return "", fmt.Errorf("invalid agent ID: %s", response)
 	}
+
+	r.logger.Info(ctx, "Query routed to agent", map[string]interface{}{
+		"agent_id": response,
+		"query":    query,
+	})
 
 	return response, nil
 }
@@ -175,7 +207,14 @@ func NewOrchestrator(registry *AgentRegistry, router Router) *Orchestrator {
 	return &Orchestrator{
 		registry: registry,
 		router:   router,
+		logger:   logging.New(), // Default logger
 	}
+}
+
+// WithLogger sets the logger for the orchestrator
+func (o *Orchestrator) WithLogger(logger logging.Logger) *Orchestrator {
+	o.logger = logger
+	return o
 }
 
 // HandleRequest handles a request, potentially routing it through multiple agents
@@ -185,6 +224,11 @@ func (o *Orchestrator) HandleRequest(ctx context.Context, query string, initialC
 	if err != nil {
 		return nil, fmt.Errorf("failed to route request: %w", err)
 	}
+
+	o.logger.Info(ctx, "Initial routing decision", map[string]interface{}{
+		"agent_id": agentID,
+		"query":    query,
+	})
 
 	// Create initial handoff request
 	handoffReq := &HandoffRequest{
@@ -200,6 +244,10 @@ func (o *Orchestrator) HandleRequest(ctx context.Context, query string, initialC
 		// Check if context is done
 		select {
 		case <-ctx.Done():
+			o.logger.Warn(ctx, "Context deadline exceeded during handoff", map[string]interface{}{
+				"iteration": i,
+				"agent_id":  handoffReq.TargetAgentID,
+			})
 			return nil, ctx.Err()
 		default:
 			// Continue processing
@@ -208,18 +256,38 @@ func (o *Orchestrator) HandleRequest(ctx context.Context, query string, initialC
 		// Process handoff
 		result, err := o.processHandoff(ctx, handoffReq)
 		if err != nil {
+			o.logger.Error(ctx, "Failed to process handoff", map[string]interface{}{
+				"error":    err.Error(),
+				"agent_id": handoffReq.TargetAgentID,
+				"query":    handoffReq.Query,
+			})
 			return nil, fmt.Errorf("failed to process handoff: %w", err)
 		}
 
 		// Check if completed or no next handoff
 		if result.Completed || result.NextHandoff == nil {
+			o.logger.Info(ctx, "Request completed", map[string]interface{}{
+				"agent_id":  result.AgentID,
+				"completed": result.Completed,
+			})
 			return result, nil
 		}
+
+		// Log handoff
+		o.logger.Info(ctx, "Handoff detected", map[string]interface{}{
+			"from_agent":   result.AgentID,
+			"to_agent":     result.NextHandoff.TargetAgentID,
+			"reason":       result.NextHandoff.Reason,
+			"preserve_mem": result.NextHandoff.PreserveMemory,
+		})
 
 		// Prepare for next handoff
 		handoffReq = result.NextHandoff
 	}
 
+	o.logger.Warn(ctx, "Exceeded maximum number of handoffs", map[string]interface{}{
+		"max_iterations": maxIterations,
+	})
 	return nil, fmt.Errorf("exceeded maximum number of handoffs")
 }
 
@@ -228,8 +296,16 @@ func (o *Orchestrator) processHandoff(ctx context.Context, req *HandoffRequest) 
 	// Get the target agent
 	targetAgent, ok := o.registry.Get(req.TargetAgentID)
 	if !ok {
+		o.logger.Error(ctx, "Agent not found", map[string]interface{}{
+			"agent_id": req.TargetAgentID,
+		})
 		return nil, fmt.Errorf("agent not found: %s", req.TargetAgentID)
 	}
+
+	o.logger.Info(ctx, "Processing request with agent", map[string]interface{}{
+		"agent_id": req.TargetAgentID,
+		"query":    req.Query,
+	})
 
 	// Create a new context with timeout
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -238,11 +314,22 @@ func (o *Orchestrator) processHandoff(ctx context.Context, req *HandoffRequest) 
 	// Run the agent
 	response, err := targetAgent.Run(ctx, req.Query)
 	if err != nil {
+		o.logger.Error(ctx, "Agent execution failed", map[string]interface{}{
+			"agent_id": req.TargetAgentID,
+			"error":    err.Error(),
+		})
 		return nil, fmt.Errorf("agent execution failed: %w", err)
 	}
 
 	// Check for handoff request in the response
 	nextHandoff := o.parseHandoffRequest(response)
+	if nextHandoff != nil {
+		o.logger.Debug(ctx, "Handoff request parsed from response", map[string]interface{}{
+			"from_agent": req.TargetAgentID,
+			"to_agent":   nextHandoff.TargetAgentID,
+			"reason":     nextHandoff.Reason,
+		})
+	}
 
 	// Create result
 	result := &HandoffResult{

@@ -11,6 +11,7 @@ import (
 	"github.com/Ingenimax/agent-sdk-go/pkg/agent"
 	"github.com/Ingenimax/agent-sdk-go/pkg/interfaces"
 	"github.com/Ingenimax/agent-sdk-go/pkg/llm/openai"
+	"github.com/Ingenimax/agent-sdk-go/pkg/logging"
 	"github.com/Ingenimax/agent-sdk-go/pkg/memory"
 	"github.com/Ingenimax/agent-sdk-go/pkg/multitenancy"
 	"github.com/Ingenimax/agent-sdk-go/pkg/orchestration"
@@ -21,6 +22,9 @@ import (
 
 // Define custom context key types to avoid using string literals
 type userIDKey struct{}
+
+// Global logger instance
+var log logging.Logger
 
 // CustomCodeOrchestrator extends the default CodeOrchestrator to fix issues with task dependencies
 type CustomCodeOrchestrator struct {
@@ -36,18 +40,18 @@ func NewCustomCodeOrchestrator(registry *orchestration.AgentRegistry) *CustomCod
 
 // ExecuteWorkflow executes a workflow with enhanced dependency handling
 func (o *CustomCodeOrchestrator) ExecuteWorkflow(ctx context.Context, workflow *orchestration.Workflow) (string, error) {
-	fmt.Println("DEBUG - Using custom workflow executor with enhanced dependency handling")
+	log.Debug(ctx, "Using custom workflow executor with enhanced dependency handling", nil)
 
 	// Execute tasks in order (no parallelism for simplicity)
 	for _, task := range workflow.Tasks {
-		fmt.Printf("DEBUG - Executing task: %s (Agent: %s)\n", task.ID, task.AgentID)
+		log.Debug(ctx, fmt.Sprintf("Executing task: %s (Agent: %s)", task.ID, task.AgentID), nil)
 
 		// Get the agent
 		agent, ok := o.registry.Get(task.AgentID)
 		if !ok {
 			err := fmt.Errorf("agent not found: %s", task.AgentID)
 			workflow.Errors[task.ID] = err
-			fmt.Printf("DEBUG - Error: %v\n", err)
+			log.Error(ctx, fmt.Sprintf("Error: %v", err), nil)
 			continue
 		}
 
@@ -58,23 +62,23 @@ func (o *CustomCodeOrchestrator) ExecuteWorkflow(ctx context.Context, workflow *
 				// Format the dependency result clearly
 				input = fmt.Sprintf("%s\n\n===== Result from %s =====\n%s\n=====\n",
 					input, depID, result)
-				fmt.Printf("DEBUG - Added dependency result from %s (length: %d)\n",
-					depID, len(result))
+				log.Debug(ctx, fmt.Sprintf("Added dependency result from %s (length: %d)",
+					depID, len(result)), nil)
 			}
 		}
 
 		// Execute the agent
-		fmt.Printf("DEBUG - Running agent with input (length: %d)\n", len(input))
+		log.Debug(ctx, fmt.Sprintf("Running agent with input (length: %d)", len(input)), nil)
 		result, err := agent.Run(ctx, input)
 		if err != nil {
 			workflow.Errors[task.ID] = err
-			fmt.Printf("DEBUG - Agent execution failed: %v\n", err)
+			log.Error(ctx, fmt.Sprintf("Agent execution failed: %v", err), nil)
 			continue
 		}
 
 		// Store the result
 		workflow.Results[task.ID] = result
-		fmt.Printf("DEBUG - Task completed with result (length: %d)\n", len(result))
+		log.Debug(ctx, fmt.Sprintf("Task completed with result (length: %d)", len(result)), nil)
 	}
 
 	// Return the final result
@@ -89,11 +93,14 @@ func (o *CustomCodeOrchestrator) ExecuteWorkflow(ctx context.Context, workflow *
 }
 
 func main() {
+	// Initialize logger
+	log = logging.New()
+
 	// Check for required API key
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" || apiKey == "your_openai_api_key" {
-		fmt.Println("Error: OPENAI_API_KEY environment variable is not set or is invalid.")
-		fmt.Println("Please set a valid OpenAI API key to continue.")
+		log.Error(context.Background(), "OPENAI_API_KEY environment variable is not set or is invalid.", nil)
+		log.Error(context.Background(), "Please set a valid OpenAI API key to continue.", nil)
 		os.Exit(1)
 	}
 
@@ -101,13 +108,13 @@ func main() {
 	openaiClient := openai.NewClient(apiKey)
 
 	// Test the API key with a simple query
-	fmt.Println("Testing OpenAI API key...")
+	log.Info(context.Background(), "Testing OpenAI API key...", nil)
 	_, err := openaiClient.Generate(context.Background(), "Hello")
 	if err != nil {
-		fmt.Printf("Error: Failed to validate OpenAI API key: %v\n", err)
+		log.Error(context.Background(), fmt.Sprintf("Failed to validate OpenAI API key: %v", err), nil)
 		os.Exit(1)
 	}
-	fmt.Println("API key is valid!")
+	log.Info(context.Background(), "API key is valid!", nil)
 
 	// Create agent registry
 	registry := orchestration.NewAgentRegistry()
@@ -116,9 +123,9 @@ func main() {
 	createAndRegisterAgents(registry, openaiClient)
 
 	// Debug: Print registered agents
-	fmt.Println("Registered agents:")
+	log.Info(context.Background(), "Registered agents:", nil)
 	for id := range registry.List() {
-		fmt.Printf("- %s\n", id)
+		log.Info(context.Background(), fmt.Sprintf("- %s", id), nil)
 	}
 
 	// Create code orchestrator for workflow execution
@@ -151,22 +158,22 @@ func main() {
 		defer queryCancel()
 
 		// Use Workflow Orchestration by default
-		fmt.Println("\nUsing Workflow Orchestration...")
+		log.Info(queryCtx, "Using Workflow Orchestration...", nil)
 
 		// Create a workflow for this query
 		workflow := createWorkflow(query)
 
 		// Print workflow details
-		fmt.Println("Workflow details:")
-		fmt.Printf("Final task ID: %s\n", workflow.FinalTaskID)
-		fmt.Println("Tasks:")
+		log.Info(queryCtx, "Workflow details:", nil)
+		log.Info(queryCtx, fmt.Sprintf("Final task ID: %s", workflow.FinalTaskID), nil)
+		log.Info(queryCtx, "Tasks:", nil)
 		for _, task := range workflow.Tasks {
-			fmt.Printf("- ID: %s, Agent: %s, Dependencies: %v\n",
-				task.ID, task.AgentID, task.Dependencies)
+			log.Info(queryCtx, fmt.Sprintf("- ID: %s, Agent: %s, Dependencies: %v",
+				task.ID, task.AgentID, task.Dependencies), nil)
 		}
 
-		fmt.Println("\nProcessing your request...")
-		fmt.Println("Starting workflow execution...")
+		log.Info(queryCtx, "Processing your request...", nil)
+		log.Info(queryCtx, "Starting workflow execution...", nil)
 
 		// Execute workflow in a goroutine with timeout
 		resultChan := make(chan struct {
@@ -175,10 +182,10 @@ func main() {
 		})
 
 		go func() {
-			fmt.Println("DEBUG - Starting workflow execution in goroutine...")
+			log.Debug(queryCtx, "Starting workflow execution in goroutine...", nil)
 			response, err := codeOrchestrator.ExecuteWorkflow(queryCtx, workflow)
-			fmt.Printf("DEBUG - Workflow execution completed with response length: %d, error: %v\n",
-				len(response), err)
+			log.Debug(queryCtx, fmt.Sprintf("Workflow execution completed with response length: %d, error: %v",
+				len(response), err), nil)
 			resultChan <- struct {
 				response string
 				err      error
@@ -198,30 +205,30 @@ func main() {
 			result.err = fmt.Errorf("workflow execution timed out")
 		}
 
-		fmt.Println("\nWorkflow execution completed.")
+		log.Info(queryCtx, "Workflow execution completed.", nil)
 
 		// Print results
-		fmt.Println("Results:")
+		log.Info(queryCtx, "Results:", nil)
 		hasResults := false
 		for taskID, taskResult := range workflow.Results {
 			if taskResult != "" {
 				hasResults = true
-				fmt.Printf("- Task %s completed with result (%d chars)\n  Preview: %s\n",
-					taskID, len(taskResult), truncateString(taskResult, 70))
+				log.Info(queryCtx, fmt.Sprintf("- Task %s completed with result (%d chars)\n  Preview: %s",
+					taskID, len(taskResult), truncateString(taskResult, 70)), nil)
 			}
 		}
 
 		// Add detailed debugging information
-		debugWorkflowExecution(workflow)
+		debugWorkflowExecution(queryCtx, workflow)
 
 		if result.err != nil {
-			fmt.Printf("Error: %v\n", result.err)
-			printWorkflowErrors(workflow)
+			log.Error(queryCtx, fmt.Sprintf("Error: %v", result.err), nil)
+			printWorkflowErrors(queryCtx, workflow)
 
 			// If we have a "final task result not found" error but the final task's dependency has a result,
 			// try to use that result as the final response
 			if strings.Contains(result.err.Error(), "final task result not found") && hasResults {
-				fmt.Println("\nAttempting to recover result from dependencies...")
+				log.Info(queryCtx, "Attempting to recover result from dependencies...", nil)
 
 				// Find the final task
 				var finalTask *orchestration.Task
@@ -236,8 +243,8 @@ func main() {
 				if finalTask != nil && len(finalTask.Dependencies) > 0 {
 					depID := finalTask.Dependencies[0]
 					if depResult, ok := workflow.Results[depID]; ok && depResult != "" {
-						fmt.Printf("\nUsing result from dependency '%s' as final response:\n%s\n",
-							depID, depResult)
+						log.Info(queryCtx, fmt.Sprintf("Using result from dependency '%s' as final response:\n%s",
+							depID, depResult), nil)
 						continue
 					}
 				}
@@ -246,8 +253,8 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("\nResponse (took %.2f seconds):\n%s\n",
-			time.Since(time.Now().Add(-5*time.Minute)).Seconds(), result.response)
+		log.Info(queryCtx, fmt.Sprintf("Response (took %.2f seconds):\n%s",
+			time.Since(time.Now().Add(-5*time.Minute)).Seconds(), result.response), nil)
 	}
 }
 
@@ -274,7 +281,7 @@ Make sure your research is thorough and includes at least 5 key points before ha
 		agent.WithOrgID("default-org"),
 	)
 	if err != nil {
-		fmt.Printf("Warning: Error creating research agent: %v\n", err)
+		log.Warn(context.Background(), fmt.Sprintf("Error creating research agent: %v", err), nil)
 	}
 	registry.Register("research", researchAgent)
 
@@ -287,7 +294,7 @@ Make sure your research is thorough and includes at least 5 key points before ha
 		agent.WithOrgID("default-org"),
 	)
 	if err != nil {
-		fmt.Printf("Warning: Error creating math agent: %v\n", err)
+		log.Warn(context.Background(), fmt.Sprintf("Error creating math agent: %v", err), nil)
 	}
 	registry.Register("math", mathAgent)
 
@@ -299,7 +306,7 @@ Make sure your research is thorough and includes at least 5 key points before ha
 		agent.WithOrgID("default-org"),
 	)
 	if err != nil {
-		fmt.Printf("Warning: Error creating creative agent: %v\n", err)
+		log.Warn(context.Background(), fmt.Sprintf("Error creating creative agent: %v", err), nil)
 	}
 	registry.Register("creative", creativeAgent)
 
@@ -323,7 +330,7 @@ IMPORTANT: You MUST always produce a summary response, even if the input is comp
 		agent.WithOrgID("default-org"),
 	)
 	if err != nil {
-		fmt.Printf("Warning: Error creating summary agent: %v\n", err)
+		log.Warn(context.Background(), fmt.Sprintf("Error creating summary agent: %v", err), nil)
 	}
 	registry.Register("summary", summaryAgent)
 }
@@ -407,24 +414,24 @@ func truncateString(s string, maxLen int) string {
 }
 
 // Helper function to print workflow errors
-func printWorkflowErrors(workflow *orchestration.Workflow) {
-	fmt.Println("\nWorkflow Errors:")
+func printWorkflowErrors(ctx context.Context, workflow *orchestration.Workflow) {
+	log.Info(ctx, "Workflow Errors:", nil)
 	for taskID, err := range workflow.Errors {
-		fmt.Printf("- Task %s: %v\n", taskID, err)
+		log.Error(ctx, fmt.Sprintf("- Task %s: %v", taskID, err), nil)
 	}
 
 	// Check for missing results
 	if workflow.FinalTaskID != "" && workflow.Results[workflow.FinalTaskID] == "" {
-		fmt.Printf("\nDEBUG - Final task '%s' has no result but no error was recorded\n", workflow.FinalTaskID)
+		log.Debug(ctx, fmt.Sprintf("Final task '%s' has no result but no error was recorded", workflow.FinalTaskID), nil)
 
 		// Check if dependencies have results
 		for _, task := range workflow.Tasks {
 			if task.ID == workflow.FinalTaskID {
 				for _, depID := range task.Dependencies {
 					if result, ok := workflow.Results[depID]; ok {
-						fmt.Printf("DEBUG - Dependency '%s' has result: %s\n", depID, truncateString(result, 100))
+						log.Debug(ctx, fmt.Sprintf("Dependency '%s' has result: %s", depID, truncateString(result, 100)), nil)
 					} else {
-						fmt.Printf("DEBUG - Dependency '%s' has no result\n", depID)
+						log.Debug(ctx, fmt.Sprintf("Dependency '%s' has no result", depID), nil)
 					}
 				}
 			}
@@ -433,11 +440,11 @@ func printWorkflowErrors(workflow *orchestration.Workflow) {
 }
 
 // Add this function to the file to debug and fix task execution issues
-func debugWorkflowExecution(workflow *orchestration.Workflow) {
-	fmt.Println("\nDEBUG - Workflow Execution Details:")
+func debugWorkflowExecution(ctx context.Context, workflow *orchestration.Workflow) {
+	log.Debug(ctx, "Workflow Execution Details:", nil)
 
 	// Print all tasks and their status
-	fmt.Println("Tasks Status:")
+	log.Debug(ctx, "Tasks Status:", nil)
 	for _, task := range workflow.Tasks {
 		statusStr := string(task.Status)
 		resultLen := 0
@@ -445,33 +452,33 @@ func debugWorkflowExecution(workflow *orchestration.Workflow) {
 			resultLen = len(result)
 		}
 
-		fmt.Printf("- Task %s (Agent: %s): Status=%s, Result Length=%d\n",
-			task.ID, task.AgentID, statusStr, resultLen)
+		log.Debug(ctx, fmt.Sprintf("- Task %s (Agent: %s): Status=%s, Result Length=%d",
+			task.ID, task.AgentID, statusStr, resultLen), nil)
 
 		// Print dependencies
 		if len(task.Dependencies) > 0 {
-			fmt.Printf("  Dependencies: %v\n", task.Dependencies)
+			log.Debug(ctx, fmt.Sprintf("  Dependencies: %v", task.Dependencies), nil)
 			for _, depID := range task.Dependencies {
 				if depResult, ok := workflow.Results[depID]; ok {
-					fmt.Printf("  - Dependency %s has result of length %d\n", depID, len(depResult))
+					log.Debug(ctx, fmt.Sprintf("  - Dependency %s has result of length %d", depID, len(depResult)), nil)
 					if len(depResult) > 0 {
-						fmt.Printf("    Preview: %s\n", truncateString(depResult, 50))
+						log.Debug(ctx, fmt.Sprintf("    Preview: %s", truncateString(depResult, 50)), nil)
 					}
 				} else {
-					fmt.Printf("  - Dependency %s has no result\n", depID)
+					log.Debug(ctx, fmt.Sprintf("  - Dependency %s has no result", depID), nil)
 				}
 			}
 		}
 	}
 
 	// Print final task info
-	fmt.Printf("\nFinal Task: %s\n", workflow.FinalTaskID)
+	log.Debug(ctx, fmt.Sprintf("Final Task: %s", workflow.FinalTaskID), nil)
 	if result, ok := workflow.Results[workflow.FinalTaskID]; ok {
-		fmt.Printf("Final Task Result Length: %d\n", len(result))
+		log.Debug(ctx, fmt.Sprintf("Final Task Result Length: %d", len(result)), nil)
 		if len(result) > 0 {
-			fmt.Printf("Final Task Result Preview: %s\n", truncateString(result, 50))
+			log.Debug(ctx, fmt.Sprintf("Final Task Result Preview: %s", truncateString(result, 50)), nil)
 		}
 	} else {
-		fmt.Println("Final Task has no result")
+		log.Debug(ctx, "Final Task has no result", nil)
 	}
 }

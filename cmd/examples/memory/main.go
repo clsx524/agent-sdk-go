@@ -27,14 +27,14 @@ func main() {
 	ctx = memory.WithConversationID(ctx, "conversation-123")
 
 	// Example 1: Conversation Buffer Memory
-	fmt.Println("=== Conversation Buffer Memory ===")
+	logger.Info(ctx, "=== Conversation Buffer Memory ===", nil)
 	bufferMemory := memory.NewConversationBuffer(
 		memory.WithMaxSize(5),
 	)
 	testMemory(ctx, bufferMemory, logger)
 
 	// Example 2: Conversation Summary Memory
-	fmt.Println("\n=== Conversation Summary Memory ===")
+	logger.Info(ctx, "\n=== Conversation Summary Memory ===", nil)
 
 	llmClient := openai.NewClient(cfg.LLM.OpenAI.APIKey,
 		openai.WithModel(cfg.LLM.OpenAI.Model),
@@ -48,7 +48,7 @@ func main() {
 	testMemory(ctx, summaryMemory, logger)
 
 	// Example 3: Vector Store Retriever Memory
-	fmt.Println("\n=== Vector Store Retriever Memory ===")
+	logger.Info(ctx, "\n=== Vector Store Retriever Memory ===", nil)
 	vectorStore, err := setupVectorStore(logger)
 	if err != nil {
 		logger.Info(ctx, "Skipping vector store example", map[string]interface{}{"error": err.Error()})
@@ -58,7 +58,7 @@ func main() {
 	}
 
 	// Example 4: Redis Memory
-	fmt.Println("\n=== Redis Memory ===")
+	logger.Info(ctx, "\n=== Redis Memory ===", nil)
 	redisClient, err := setupRedisClient()
 	if err != nil {
 		logger.Info(ctx, "Skipping Redis example", map[string]interface{}{"error": err.Error()})
@@ -123,9 +123,9 @@ func testMemory(ctx context.Context, mem interfaces.Memory, logger logging.Logge
 		return
 	}
 
-	fmt.Println("All messages:")
+	logger.Info(ctx, "All messages:", nil)
 	for i, msg := range allMessages {
-		fmt.Printf("%d. %s: %s\n", i+1, msg.Role, msg.Content)
+		logger.Info(ctx, fmt.Sprintf("%d. %s: %s", i+1, msg.Role, msg.Content), nil)
 	}
 
 	// Get user messages only
@@ -135,9 +135,9 @@ func testMemory(ctx context.Context, mem interfaces.Memory, logger logging.Logge
 		return
 	}
 
-	fmt.Println("\nUser messages only:")
+	logger.Info(ctx, "User messages only:", nil)
 	for i, msg := range userMessages {
-		fmt.Printf("%d. %s: %s\n", i+1, msg.Role, msg.Content)
+		logger.Info(ctx, fmt.Sprintf("%d. %s: %s", i+1, msg.Role, msg.Content), nil)
 	}
 
 	// Get last 2 messages
@@ -147,9 +147,9 @@ func testMemory(ctx context.Context, mem interfaces.Memory, logger logging.Logge
 		return
 	}
 
-	fmt.Println("\nLast 2 messages:")
+	logger.Info(ctx, "Last 2 messages:", nil)
 	for i, msg := range lastMessages {
-		fmt.Printf("%d. %s: %s\n", i+1, msg.Role, msg.Content)
+		logger.Info(ctx, fmt.Sprintf("%d. %s: %s", i+1, msg.Role, msg.Content), nil)
 	}
 
 	// Clear memory
@@ -165,11 +165,11 @@ func testMemory(ctx context.Context, mem interfaces.Memory, logger logging.Logge
 		return
 	}
 
-	fmt.Println("\nAfter clearing:")
+	logger.Info(ctx, "After clearing:", nil)
 	if len(clearedMessages) == 0 {
-		fmt.Println("Memory cleared successfully")
+		logger.Info(ctx, "Memory cleared successfully", nil)
 	} else {
-		fmt.Printf("Memory not cleared, %d messages remaining\n", len(clearedMessages))
+		logger.Info(ctx, fmt.Sprintf("Memory not cleared, %d messages remaining", len(clearedMessages)), nil)
 	}
 }
 
@@ -177,6 +177,9 @@ func setupVectorStore(logger logging.Logger) (interfaces.VectorStore, error) {
 	// Check if we have the necessary environment variables
 	// This is a placeholder - in a real application, you would
 	// configure and return a real vector store
+
+	// Log that we're using a placeholder implementation
+	logger.Info(context.Background(), "Vector store setup is a placeholder implementation", nil)
 
 	// For example, to use a simple in-memory vector store:
 	// return vectorstore.NewInMemory(), nil
