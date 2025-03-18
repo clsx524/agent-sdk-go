@@ -20,6 +20,7 @@ type Agent struct {
 	tracer              interfaces.Tracer
 	guardrails          interfaces.Guardrails
 	systemPrompt        string
+	name                string                    // Name of the agent, e.g., "PlatformOps", "Math", "Research"
 	requirePlanApproval bool                      // New field to control whether execution plans require approval
 	plans               map[string]*ExecutionPlan // Map of task IDs to execution plans
 	plansMutex          sync.RWMutex              // Mutex for thread-safe access to plans
@@ -81,6 +82,13 @@ func WithSystemPrompt(prompt string) Option {
 func WithRequirePlanApproval(require bool) Option {
 	return func(a *Agent) {
 		a.requirePlanApproval = require
+	}
+}
+
+// WithName sets the name for the agent
+func WithName(name string) Option {
+	return func(a *Agent) {
+		a.name = name
 	}
 }
 
@@ -526,8 +534,14 @@ func (a *Agent) generateRoleResponse() string {
 	}
 
 	// Create a prompt that asks the LLM to generate a role description based on the system prompt
+	agentName := "an AI assistant"
+	if a.name != "" {
+		agentName = a.name
+	}
+
 	prompt := fmt.Sprintf(`Based on the following system prompt that defines your role and capabilities, 
 generate a brief, natural-sounding response (3-5 sentences) introducing yourself to a user who asked what you can do.
+You are named "%s".
 Do not directly quote from the system prompt, but create a conversational first-person response that captures your 
 purpose, expertise, and how you can help. The response should feel like a natural conversation, not like reading documentation.
 
@@ -535,12 +549,12 @@ System prompt:
 %s
 
 Your response should:
-1. Introduce yourself using first-person perspective
+1. Introduce yourself using first-person perspective, mentioning your name ("%s")
 2. Briefly explain your specialization or purpose
 3. Mention 2-3 key areas you can help with
 4. End with a friendly question about how you can assist the user
 
-Response:`, a.systemPrompt)
+Response:`, agentName, a.systemPrompt, agentName)
 
 	// Generate a response using the LLM with the system prompt as context
 	generateOptions := []interfaces.GenerateOption{}
@@ -552,6 +566,9 @@ Response:`, a.systemPrompt)
 	response, err := a.llm.Generate(context.Background(), prompt, generateOptions...)
 	if err != nil {
 		// Fallback to a simple response in case of errors
+		if a.name != "" {
+			return fmt.Sprintf("I'm %s, an AI assistant based on the role defined in my system prompt. How can I help you today?", a.name)
+		}
 		return "I'm an AI assistant based on the role defined in my system prompt. How can I help you today?"
 	}
 

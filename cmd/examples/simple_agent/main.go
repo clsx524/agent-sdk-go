@@ -30,6 +30,7 @@ func main() {
 		agent.WithMemory(memory.NewConversationBuffer()),
 		agent.WithTools(createTools(logger).List()...),
 		agent.WithSystemPrompt("You are a helpful AI assistant. When you don't know the answer or need real-time information, use the available tools to find the information."),
+		agent.WithName("ResearchAssistant"),
 	)
 	if err != nil {
 		logger.Error(context.Background(), "Failed to create agent", map[string]interface{}{"error": err.Error()})

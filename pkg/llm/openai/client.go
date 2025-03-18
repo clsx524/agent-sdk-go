@@ -107,7 +107,7 @@ func (c *OpenAIClient) Generate(ctx context.Context, prompt string, options ...i
 		Stop:             params.StopSequences,
 	}
 
-	c.logger.Debug(ctx, "Sending request to OpenAI", map[string]interface{}{"request": req})
+	//c.logger.Debug(ctx, "Sending request to OpenAI", map[string]interface{}{"request": req})
 	// Set organization ID if available
 	if orgID, ok := ctx.Value(organizationKey).(string); ok && orgID != "" {
 		req.User = orgID

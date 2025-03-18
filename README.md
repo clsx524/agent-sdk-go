@@ -122,3 +122,75 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+# StarOps Agent
+
+A PlatformOps assistant that helps with deployment and management tasks.
+
+## Features
+
+- Interactive command-line interface
+- Natural language understanding for deployment requests
+- Multi-agent architecture with specialist agents
+- Detailed deployment planning
+- Task management system with approval workflow
+
+## Task Management
+
+The StarOps Agent includes a task management system that provides tracking and approval for deployment tasks:
+
+### Task Commands
+
+- `task list` - List all your tasks
+- `task get <task-id>` - View details of a specific task
+- `task approve <task-id>` - Approve a task's execution plan
+- `task reject <task-id> <feedback>` - Reject a task's plan with feedback for improvement
+
+### Task Workflow
+
+1. Create a task by asking the agent to deploy something (e.g., "deploy llama 3.3 on kserve")
+2. The agent will create a task and provide you with the task ID
+3. Check the status with `task get <task-id>`
+4. Once planning is complete, review the plan and either:
+   - Approve it with `task approve <task-id>`
+   - Reject it with `task reject <task-id> The plan needs more security measures`
+5. If approved, the task will be executed
+6. If rejected, the task will be replanned with your feedback
+
+### Task Statuses
+
+- `pending` - Task has been created but planning hasn't started
+- `planning` - Task plan is being created
+- `awaiting_approval` - Plan is ready for your review
+- `executing` - Plan is being executed
+- `completed` - Task has been completed successfully
+- `failed` - Task has failed
+
+## Usage
+
+1. Run the application:
+   ```
+   go run main.go
+   ```
+
+2. Ask the agent to deploy something:
+   ```
+   Enter your query: deploy llama 3.3 on kserve
+   ```
+
+3. Follow the task workflow described above to manage your deployment.
+
+## Development
+
+The StarOps Agent is built with a modular architecture:
+
+- `internal/agent` - Agent implementation and factory
+- `internal/planning` - Deployment planning and project management
+- `internal/services` - Task management and other services
+- `internal/models` - Data models for tasks and plans
+- `internal/conversation` - Session handling and user interaction
+- `internal/prompts` - System prompts for different agents
+
+## License
+
+Copyright © 2025 Ingenimax Inc.
