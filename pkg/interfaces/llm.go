@@ -20,7 +20,6 @@ type GenerateOption func(options *GenerateOptions)
 // GenerateOptions contains configuration for text generation
 type GenerateOptions struct {
 	Temperature      float64
-	MaxTokens        int
 	TopP             float64
 	FrequencyPenalty float64
 	PresencePenalty  float64

@@ -64,7 +64,6 @@ func (c *OpenAIClient) Generate(ctx context.Context, prompt string, options ...i
 	// Apply options
 	params := &interfaces.GenerateOptions{
 		Temperature: 0.7,
-		MaxTokens:   1000,
 	}
 
 	for _, option := range options {
@@ -100,7 +99,6 @@ func (c *OpenAIClient) Generate(ctx context.Context, prompt string, options ...i
 		Model:            c.Model,
 		Messages:         messages,
 		Temperature:      float32(params.Temperature),
-		MaxTokens:        params.MaxTokens,
 		TopP:             float32(params.TopP),
 		FrequencyPenalty: float32(params.FrequencyPenalty),
 		PresencePenalty:  float32(params.PresencePenalty),
@@ -148,7 +146,6 @@ func (c *OpenAIClient) Chat(ctx context.Context, messages []llm.Message, params 
 		Model:            c.Model,
 		Messages:         chatMessages,
 		Temperature:      float32(params.Temperature),
-		MaxTokens:        params.MaxTokens,
 		TopP:             float32(params.TopP),
 		FrequencyPenalty: float32(params.FrequencyPenalty),
 		PresencePenalty:  float32(params.PresencePenalty),
@@ -173,7 +170,6 @@ func (c *OpenAIClient) GenerateWithTools(ctx context.Context, prompt string, too
 	// Convert options to params
 	params := &interfaces.GenerateOptions{
 		Temperature: 0.7,
-		MaxTokens:   1000,
 	}
 	for _, opt := range options {
 		if opt != nil {
@@ -245,7 +241,6 @@ func (c *OpenAIClient) GenerateWithTools(ctx context.Context, prompt string, too
 		Messages:         messages,
 		Tools:            openaiTools,
 		Temperature:      float32(params.Temperature),
-		MaxTokens:        params.MaxTokens,
 		TopP:             float32(params.TopP),
 		FrequencyPenalty: float32(params.FrequencyPenalty),
 		PresencePenalty:  float32(params.PresencePenalty),
@@ -321,7 +316,6 @@ func (c *OpenAIClient) GenerateWithTools(ctx context.Context, prompt string, too
 			Model:            c.Model,
 			Messages:         messages,
 			Temperature:      float32(params.Temperature),
-			MaxTokens:        params.MaxTokens,
 			TopP:             float32(params.TopP),
 			FrequencyPenalty: float32(params.FrequencyPenalty),
 			PresencePenalty:  float32(params.PresencePenalty),
@@ -355,13 +349,6 @@ func (c *OpenAIClient) Name() string {
 func WithTemperature(temperature float64) interfaces.GenerateOption {
 	return func(options *interfaces.GenerateOptions) {
 		options.Temperature = temperature
-	}
-}
-
-// WithMaxTokens creates a GenerateOption to set the max tokens
-func WithMaxTokens(maxTokens int) interfaces.GenerateOption {
-	return func(options *interfaces.GenerateOptions) {
-		options.MaxTokens = maxTokens
 	}
 }
 

@@ -34,7 +34,6 @@ func main() {
 		"Write a haiku about programming",
 		openai.WithSystemMessage("You are a creative assistant who specializes in writing haikus."),
 		openai.WithTemperature(0.7),
-		openai.WithMaxTokens(50),
 	)
 	if err != nil {
 		logger.Error(ctx, "Failed to generate", map[string]interface{}{"error": err.Error()})
@@ -75,7 +74,6 @@ func main() {
 
 	resp, err = client.Chat(ctx, multiTurnMessages, &llm.GenerateParams{
 		Temperature: 0.5,
-		MaxTokens:   300,
 	})
 	if err != nil {
 		logger.Error(ctx, "Failed to chat", map[string]interface{}{"error": err.Error()})
@@ -98,7 +96,6 @@ func main() {
 	// Get the next response
 	resp, err = client.Chat(ctx, multiTurnMessages, &llm.GenerateParams{
 		Temperature: 0.5,
-		MaxTokens:   300,
 	})
 	if err != nil {
 		logger.Error(ctx, "Failed to chat", map[string]interface{}{"error": err.Error()})

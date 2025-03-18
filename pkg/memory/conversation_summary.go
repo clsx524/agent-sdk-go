@@ -148,7 +148,7 @@ func (c *ConversationSummary) Clear(ctx context.Context) error {
 func (c *ConversationSummary) summarize(ctx context.Context, messages []interfaces.Message) (string, error) {
 	// Format messages for summarization
 	var sb strings.Builder
-	sb.WriteString("Summarize the following conversation:\n\n")
+	sb.WriteString("Summarize the following conversation in a concise summary (about 100 words maximum):\n\n")
 	for _, msg := range messages {
 		sb.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.Content))
 	}
@@ -157,7 +157,6 @@ func (c *ConversationSummary) summarize(ctx context.Context, messages []interfac
 	// Generate summary with default options instead of nil
 	summary, err := c.llmClient.Generate(ctx, sb.String(), func(o *interfaces.GenerateOptions) {
 		o.Temperature = 0.7
-		o.MaxTokens = 100
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to generate summary: %w", err)

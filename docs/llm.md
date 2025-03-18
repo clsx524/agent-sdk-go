@@ -27,7 +27,6 @@ client = openai.NewClient(
     cfg.LLM.OpenAI.APIKey,
     openai.WithModel("gpt-4o-mini"),
     openai.WithTemperature(0.7),
-    openai.WithMaxTokens(2048),
 )
 ```
 
@@ -50,7 +49,6 @@ client = anthropic.NewClient(
     cfg.LLM.Anthropic.APIKey,
     anthropic.WithModel("claude-3-opus-20240229"),
     anthropic.WithTemperature(0.7),
-    anthropic.WithMaxTokens(2048),
 )
 ```
 
@@ -79,7 +77,6 @@ client = azure.NewClient(
     cfg.LLM.AzureOpenAI.Deployment,
     azure.WithAPIVersion("2023-05-15"),
     azure.WithTemperature(0.7),
-    azure.WithMaxTokens(2048),
 )
 ```
 
@@ -165,9 +162,6 @@ These options are available for all LLM providers:
 ```go
 // Temperature controls randomness (0.0 to 1.0)
 WithTemperature(0.7)
-
-// MaxTokens controls the maximum length of the response
-WithMaxTokens(2048)
 
 // TopP controls diversity via nucleus sampling
 WithTopP(0.9)
@@ -320,14 +314,12 @@ func main() {
             cfg.LLM.OpenAI.APIKey,
             openai.WithModel(cfg.LLM.OpenAI.Model),
             openai.WithTemperature(cfg.LLM.OpenAI.Temperature),
-            openai.WithMaxTokens(cfg.LLM.OpenAI.MaxTokens),
         )
     case "anthropic":
         client = anthropic.NewClient(
             cfg.LLM.Anthropic.APIKey,
             anthropic.WithModel(cfg.LLM.Anthropic.Model),
             anthropic.WithTemperature(cfg.LLM.Anthropic.Temperature),
-            anthropic.WithMaxTokens(cfg.LLM.Anthropic.MaxTokens),
         )
     case "azure":
         client = azure.NewClient(
@@ -336,7 +328,6 @@ func main() {
             cfg.LLM.AzureOpenAI.Deployment,
             azure.WithAPIVersion(cfg.LLM.AzureOpenAI.APIVersion),
             azure.WithTemperature(cfg.LLM.AzureOpenAI.Temperature),
-            azure.WithMaxTokens(cfg.LLM.AzureOpenAI.MaxTokens),
         )
     default:
         log.Fatalf("Unsupported LLM provider: %s", cfg.LLM.Provider)

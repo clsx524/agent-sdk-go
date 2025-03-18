@@ -15,7 +15,6 @@ type Config struct {
 			APIKey         string
 			Model          string
 			Temperature    float64
-			MaxTokens      int
 			BaseURL        string
 			Timeout        time.Duration
 			EmbeddingModel string
@@ -26,8 +25,17 @@ type Config struct {
 			APIKey      string
 			Model       string
 			Temperature float64
-			MaxTokens   int
 			BaseURL     string
+			Timeout     time.Duration
+		}
+
+		// Azure OpenAI configuration
+		AzureOpenAI struct {
+			APIKey      string
+			Endpoint    string
+			Deployment  string
+			APIVersion  string
+			Temperature float64
 			Timeout     time.Duration
 		}
 	}
@@ -125,25 +133,40 @@ type Config struct {
 	}
 }
 
+// OpenAIConfig contains OpenAI-specific configuration
+type OpenAIConfig struct {
+	APIKey      string
+	Model       string
+	Temperature float64
+	BaseURL     string
+	Timeout     time.Duration
+}
+
+// AnthropicConfig contains Anthropic-specific configuration
+type AnthropicConfig struct {
+	APIKey      string
+	Model       string
+	Temperature float64
+	BaseURL     string
+	Timeout     time.Duration
+}
+
+// AzureOpenAIConfig contains Azure OpenAI-specific configuration
+type AzureOpenAIConfig struct {
+	APIKey      string
+	Endpoint    string
+	Deployment  string
+	APIVersion  string
+	Temperature float64
+	Timeout     time.Duration
+}
+
 // LoadFromEnv loads configuration from environment variables
 func LoadFromEnv() *Config {
 	config := &Config{}
 
 	// LLM configuration
-	config.LLM.OpenAI.APIKey = getEnv("OPENAI_API_KEY", "")
-	config.LLM.OpenAI.Model = getEnv("OPENAI_MODEL", "gpt-4o-mini")
-	config.LLM.OpenAI.Temperature = getEnvFloat("OPENAI_TEMPERATURE", 0.7)
-	config.LLM.OpenAI.MaxTokens = getEnvInt("OPENAI_MAX_TOKENS", 2048)
-	config.LLM.OpenAI.BaseURL = getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-	config.LLM.OpenAI.Timeout = time.Duration(getEnvInt("OPENAI_TIMEOUT_SECONDS", 60)) * time.Second
-	config.LLM.OpenAI.EmbeddingModel = getEnv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-
-	config.LLM.Anthropic.APIKey = getEnv("ANTHROPIC_API_KEY", "")
-	config.LLM.Anthropic.Model = getEnv("ANTHROPIC_MODEL", "claude-3-opus-20240229")
-	config.LLM.Anthropic.Temperature = getEnvFloat("ANTHROPIC_TEMPERATURE", 0.7)
-	config.LLM.Anthropic.MaxTokens = getEnvInt("ANTHROPIC_MAX_TOKENS", 2048)
-	config.LLM.Anthropic.BaseURL = getEnv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
-	config.LLM.Anthropic.Timeout = time.Duration(getEnvInt("ANTHROPIC_TIMEOUT_SECONDS", 60)) * time.Second
+	initLLMConfig(config)
 
 	// Memory configuration
 	config.Memory.Redis.URL = getEnv("REDIS_URL", "localhost:6379")
@@ -195,6 +218,31 @@ func LoadFromEnv() *Config {
 	return config
 }
 
+// initLLMConfig initializes LLM configuration with defaults
+func initLLMConfig(config *Config) {
+	// OpenAI defaults
+	config.LLM.OpenAI.APIKey = getEnvString("OPENAI_API_KEY", "")
+	config.LLM.OpenAI.Model = getEnvString("OPENAI_MODEL", "gpt-4o-mini")
+	config.LLM.OpenAI.Temperature = getEnvFloat("OPENAI_TEMPERATURE", 0.7)
+	config.LLM.OpenAI.BaseURL = getEnvString("OPENAI_BASE_URL", "")
+	config.LLM.OpenAI.Timeout = time.Duration(getEnvInt("OPENAI_TIMEOUT", 60)) * time.Second
+
+	// Anthropic defaults
+	config.LLM.Anthropic.APIKey = getEnvString("ANTHROPIC_API_KEY", "")
+	config.LLM.Anthropic.Model = getEnvString("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
+	config.LLM.Anthropic.Temperature = getEnvFloat("ANTHROPIC_TEMPERATURE", 0.7)
+	config.LLM.Anthropic.BaseURL = getEnvString("ANTHROPIC_BASE_URL", "")
+	config.LLM.Anthropic.Timeout = time.Duration(getEnvInt("ANTHROPIC_TIMEOUT", 60)) * time.Second
+
+	// Azure OpenAI defaults
+	config.LLM.AzureOpenAI.APIKey = getEnvString("AZURE_OPENAI_API_KEY", "")
+	config.LLM.AzureOpenAI.Endpoint = getEnvString("AZURE_OPENAI_ENDPOINT", "")
+	config.LLM.AzureOpenAI.Deployment = getEnvString("AZURE_OPENAI_DEPLOYMENT", "")
+	config.LLM.AzureOpenAI.APIVersion = getEnvString("AZURE_OPENAI_API_VERSION", "2023-05-15")
+	config.LLM.AzureOpenAI.Temperature = getEnvFloat("AZURE_OPENAI_TEMPERATURE", 0.7)
+	config.LLM.AzureOpenAI.Timeout = time.Duration(getEnvInt("AZURE_OPENAI_TIMEOUT", 60)) * time.Second
+}
+
 // getEnv gets an environment variable or returns a default value
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
@@ -241,6 +289,15 @@ func getEnvFloat(key string, defaultValue float64) float64 {
 		return defaultValue
 	}
 	return floatValue
+}
+
+// getEnvString gets a string environment variable or returns a default value
+func getEnvString(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 // Global instance of the configuration

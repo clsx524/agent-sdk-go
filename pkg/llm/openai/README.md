@@ -34,7 +34,6 @@ response, err := client.Generate(
     context.Background(),
     "Write a haiku about programming",
     openai.WithTemperature(0.7),
-    openai.WithMaxTokens(50),
 )
 ```
 
@@ -79,7 +78,6 @@ response, err := client.GenerateWithTools(
 The OpenAI client provides several option functions for configuring requests:
 
 - `WithTemperature(float64)` - Controls randomness (0.0 to 1.0)
-- `WithMaxTokens(int)` - Sets maximum response length
 - `WithTopP(float64)` - Controls diversity via nucleus sampling
 - `WithFrequencyPenalty(float64)` - Reduces repetition of token sequences
 - `WithPresencePenalty(float64)` - Reduces repetition of topics

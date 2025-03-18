@@ -339,8 +339,8 @@ func (s *InMemoryTaskService) AddTaskLog(ctx context.Context, taskID string, mes
 }
 
 // planTask plans a task using the provided planner
-func (s *InMemoryTaskService) planTask(_ context.Context, task *Task) {
-	s.logger.Info(context.Background(), "Planning task", map[string]interface{}{
+func (s *InMemoryTaskService) planTask(ctx context.Context, task *Task) {
+	s.logger.Info(ctx, "Planning task", map[string]interface{}{
 		"task_id": task.ID,
 	})
 
@@ -348,8 +348,6 @@ func (s *InMemoryTaskService) planTask(_ context.Context, task *Task) {
 	s.mutex.Lock()
 	task.Status = StatusPlanning
 	task.UpdatedAt = time.Now()
-
-	// Add log entry
 	logEntry := LogEntry{
 		ID:        uuid.New().String(),
 		TaskID:    task.ID,
@@ -360,24 +358,58 @@ func (s *InMemoryTaskService) planTask(_ context.Context, task *Task) {
 	task.Logs = append(task.Logs, logEntry)
 	s.mutex.Unlock()
 
-	ctx := context.Background()
+	// Check if there's a platform engineer plan in the metadata
+	var planContent string
+	var platformEngineerPlan bool
 
-	// Create a plan using the planner
-	planContent, err := s.planner.CreatePlan(ctx, task)
-	if err != nil {
-		s.handlePlanningFailure(task, err)
-		return
+	s.mutex.Lock()
+	if task.Metadata != nil {
+		if engineerPlan, ok := task.Metadata["platform_engineer_plan"].(string); ok && engineerPlan != "" {
+			planContent = engineerPlan
+			platformEngineerPlan = true
+			s.logger.Info(ctx, "Using platform engineer plan from metadata", map[string]interface{}{
+				"task_id": task.ID,
+			})
+
+			// Remove the plan from metadata to avoid reusing it
+			delete(task.Metadata, "platform_engineer_plan")
+		}
+	}
+	s.mutex.Unlock()
+
+	// If no platform engineer plan was found, generate one using the planner
+	if !platformEngineerPlan {
+		var err error
+		planContent, err = s.planner.CreatePlan(ctx, task)
+		if err != nil {
+			s.handlePlanningFailure(task, err)
+			return
+		}
 	}
 
-	// Parse the plan and create a model
+	// Create a plan object and add it to the task
 	plan := &Plan{
-		ID:        uuid.New().String(),
-		TaskID:    task.ID,
-		Steps:     []Step{},
-		CreatedAt: time.Now(),
+		ID:         uuid.New().String(),
+		TaskID:     task.ID,
+		CreatedAt:  time.Now(),
+		Steps:      []Step{},
+		IsApproved: false,
 	}
 
-	// Add the plan to the task
+	// Create a single default step for the plan
+	defaultStep := Step{
+		ID:          uuid.New().String(),
+		PlanID:      plan.ID,
+		Description: "Execute the deployment plan as described",
+		Status:      StepStatusPending,
+		Order:       1,
+	}
+	plan.Steps = append(plan.Steps, defaultStep)
+	s.logger.Info(ctx, "Created default step for plan", map[string]interface{}{
+		"step_id": defaultStep.ID,
+	})
+
+	// Update task with plan
 	s.mutex.Lock()
 	task.Plan = plan
 	task.Status = StatusApproval
@@ -458,6 +490,17 @@ func (s *InMemoryTaskService) replanTask(_ context.Context, task *Task, feedback
 		Steps:     []Step{},
 		CreatedAt: time.Now(),
 	}
+
+	// Create a single default step for the plan
+	defaultStep := Step{
+		ID:          uuid.New().String(),
+		PlanID:      plan.ID,
+		Description: "Execute the revised deployment plan as described",
+		Status:      StepStatusPending,
+		Order:       1,
+	}
+	plan.Steps = append(plan.Steps, defaultStep)
+	s.logger.Info(ctx, "Created default step for revised plan", nil)
 
 	// Update task with plan
 	s.mutex.Lock()

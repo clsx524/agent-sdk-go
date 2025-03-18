@@ -9,7 +9,6 @@ type Message struct {
 // GenerateParams contains parameters for text generation
 type GenerateParams struct {
 	Temperature      float64  // Controls randomness (0.0 to 1.0)
-	MaxTokens        int      // Maximum number of tokens to generate
 	TopP             float64  // Alternative to temperature for nucleus sampling
 	FrequencyPenalty float64  // Penalize frequent tokens (-2.0 to 2.0)
 	PresencePenalty  float64  // Penalize tokens already present (-2.0 to 2.0)
@@ -22,7 +21,6 @@ type GenerateParams struct {
 func DefaultGenerateParams() *GenerateParams {
 	return &GenerateParams{
 		Temperature:      0.7,
-		MaxTokens:        1000,
 		TopP:             1.0,
 		FrequencyPenalty: 0.0,
 		PresencePenalty:  0.0,
