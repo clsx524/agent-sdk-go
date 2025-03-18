@@ -47,7 +47,7 @@ func NewClient(apiKey string, options ...Option) *OpenAIClient {
 	// Create client with default options
 	client := &OpenAIClient{
 		Client: openai.NewClient(apiKey),
-		Model:  "gpt-4o",
+		Model:  "gpt-4o-mini",
 		logger: logging.New(),
 	}
 
@@ -77,10 +77,28 @@ func (c *OpenAIClient) Generate(ctx context.Context, prompt string, options ...i
 		ctx = context.WithValue(ctx, organizationKey, orgID)
 	}
 
+	// Create request with system message if provided
+	messages := []openai.ChatCompletionMessage{}
+
+	// Add system message if available
+	if params.SystemMessage != "" {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    "system",
+			Content: params.SystemMessage,
+		})
+		c.logger.Debug(ctx, "Using system message", map[string]interface{}{"system_message": params.SystemMessage})
+	}
+
+	// Add user message
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    "user",
+		Content: prompt,
+	})
+
 	// Create request
 	req := openai.ChatCompletionRequest{
 		Model:            c.Model,
-		Messages:         []openai.ChatCompletionMessage{{Role: "user", Content: prompt}},
+		Messages:         messages,
 		Temperature:      float32(params.Temperature),
 		MaxTokens:        params.MaxTokens,
 		TopP:             float32(params.TopP),
@@ -89,6 +107,7 @@ func (c *OpenAIClient) Generate(ctx context.Context, prompt string, options ...i
 		Stop:             params.StopSequences,
 	}
 
+	c.logger.Debug(ctx, "Sending request to OpenAI", map[string]interface{}{"request": req})
 	// Set organization ID if available
 	if orgID, ok := ctx.Value(organizationKey).(string); ok && orgID != "" {
 		req.User = orgID
@@ -203,9 +222,27 @@ func (c *OpenAIClient) GenerateWithTools(ctx context.Context, prompt string, too
 		}
 	}
 
+	// Create messages array with system message if provided
+	messages := []openai.ChatCompletionMessage{}
+
+	// Add system message if available
+	if params.SystemMessage != "" {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    "system",
+			Content: params.SystemMessage,
+		})
+		c.logger.Debug(ctx, "Using system message", map[string]interface{}{"system_message": params.SystemMessage})
+	}
+
+	// Add user message
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    "user",
+		Content: prompt,
+	})
+
 	req := openai.ChatCompletionRequest{
 		Model:            c.Model,
-		Messages:         []openai.ChatCompletionMessage{{Role: "user", Content: prompt}},
+		Messages:         messages,
 		Tools:            openaiTools,
 		Temperature:      float32(params.Temperature),
 		MaxTokens:        params.MaxTokens,
@@ -353,5 +390,12 @@ func WithPresencePenalty(presencePenalty float64) interfaces.GenerateOption {
 func WithStopSequences(stopSequences []string) interfaces.GenerateOption {
 	return func(options *interfaces.GenerateOptions) {
 		options.StopSequences = stopSequences
+	}
+}
+
+// WithSystemMessage creates a GenerateOption to set the system message
+func WithSystemMessage(systemMessage string) interfaces.GenerateOption {
+	return func(options *interfaces.GenerateOptions) {
+		options.SystemMessage = systemMessage
 	}
 }

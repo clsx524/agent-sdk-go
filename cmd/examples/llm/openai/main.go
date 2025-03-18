@@ -28,10 +28,11 @@ func main() {
 		openai.WithLogger(logger),
 	)
 
-	// Test text generation
+	// Test text generation with system message
 	resp, err := client.Generate(
 		ctx,
 		"Write a haiku about programming",
+		openai.WithSystemMessage("You are a creative assistant who specializes in writing haikus."),
 		openai.WithTemperature(0.7),
 		openai.WithMaxTokens(50),
 	)
@@ -59,4 +60,49 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info(ctx, "Chat response", map[string]interface{}{"text": resp})
+
+	// Example of multi-turn conversation with Chat method
+	multiTurnMessages := []llm.Message{
+		{
+			Role:    "system",
+			Content: "You are a senior Go programmer who provides concise code examples.",
+		},
+		{
+			Role:    "user",
+			Content: "Show me how to implement a simple HTTP server in Go.",
+		},
+	}
+
+	resp, err = client.Chat(ctx, multiTurnMessages, &llm.GenerateParams{
+		Temperature: 0.5,
+		MaxTokens:   300,
+	})
+	if err != nil {
+		logger.Error(ctx, "Failed to chat", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+	logger.Info(ctx, "First response", map[string]interface{}{"text": resp})
+
+	// Add the assistant's response to continue the conversation
+	multiTurnMessages = append(multiTurnMessages, llm.Message{
+		Role:    "assistant",
+		Content: resp,
+	})
+
+	// Add a follow-up question
+	multiTurnMessages = append(multiTurnMessages, llm.Message{
+		Role:    "user",
+		Content: "How would I add middleware for logging requests?",
+	})
+
+	// Get the next response
+	resp, err = client.Chat(ctx, multiTurnMessages, &llm.GenerateParams{
+		Temperature: 0.5,
+		MaxTokens:   300,
+	})
+	if err != nil {
+		logger.Error(ctx, "Failed to chat", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+	logger.Info(ctx, "Follow-up response", map[string]interface{}{"text": resp})
 }

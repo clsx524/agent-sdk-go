@@ -17,6 +17,7 @@ The Agent SDK provides a comprehensive framework for building AI-powered agents 
 - **Tracing and Observability**: Built-in support for Langfuse and OpenTelemetry
 - **Multi-tenancy**: Support for multiple organizations and users
 - **Guardrails**: Safety mechanisms to ensure responsible AI usage
+- **Execution Plans**: Allow users to review and modify tool execution plans before execution
 
 ## Installation
 
@@ -85,6 +86,8 @@ Check out the [examples](cmd/examples) directory for more detailed examples:
 - [Embedding](cmd/examples/embedding): Working with embeddings
 - [Context](cmd/examples/context): Managing context in conversations
 - [Task Execution](cmd/examples/task_execution): Tasks execution
+- [Execution Plan](cmd/examples/execution_plan): Allowing users to review and modify execution plans
+- [API Server](cmd/examples/api_server): Implementing an API server with execution plan functionality
 
 ## Documentation
 

@@ -26,4 +26,5 @@ type GenerateOptions struct {
 	PresencePenalty  float64
 	StopSequences    []string
 	OrgID            string // For multi-tenancy
+	SystemMessage    string // System message for chat models
 }

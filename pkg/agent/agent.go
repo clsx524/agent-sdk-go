@@ -3,20 +3,26 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/interfaces"
+	"github.com/Ingenimax/agent-sdk-go/pkg/llm/openai"
 	"github.com/Ingenimax/agent-sdk-go/pkg/multitenancy"
 )
 
 // Agent represents an AI agent
 type Agent struct {
-	llm          interfaces.LLM
-	memory       interfaces.Memory
-	tools        []interfaces.Tool
-	orgID        string
-	tracer       interfaces.Tracer
-	guardrails   interfaces.Guardrails
-	systemPrompt string
+	llm                 interfaces.LLM
+	memory              interfaces.Memory
+	tools               []interfaces.Tool
+	orgID               string
+	tracer              interfaces.Tracer
+	guardrails          interfaces.Guardrails
+	systemPrompt        string
+	requirePlanApproval bool                      // New field to control whether execution plans require approval
+	plans               map[string]*ExecutionPlan // Map of task IDs to execution plans
+	plansMutex          sync.RWMutex              // Mutex for thread-safe access to plans
 }
 
 // Option represents an option for configuring an agent
@@ -71,9 +77,19 @@ func WithSystemPrompt(prompt string) Option {
 	}
 }
 
+// WithRequirePlanApproval sets whether execution plans require user approval
+func WithRequirePlanApproval(require bool) Option {
+	return func(a *Agent) {
+		a.requirePlanApproval = require
+	}
+}
+
 // NewAgent creates a new agent with the given options
 func NewAgent(options ...Option) (*Agent, error) {
-	agent := &Agent{}
+	agent := &Agent{
+		requirePlanApproval: true, // Default to requiring approval
+		plans:               make(map[string]*ExecutionPlan),
+	}
 
 	for _, option := range options {
 		option(agent)
@@ -120,6 +136,190 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 		input = guardedInput
 	}
 
+	// Check if the input is related to an existing plan
+	taskID, action, planInput := a.extractPlanAction(input)
+	if taskID != "" {
+		return a.handlePlanAction(ctx, taskID, action, planInput)
+	}
+
+	// Check if the user is asking about the agent's role or identity
+	if a.systemPrompt != "" && a.isAskingAboutRole(input) {
+		response := a.generateRoleResponse()
+
+		// Add the role response to memory if available
+		if a.memory != nil {
+			if err := a.memory.AddMessage(ctx, interfaces.Message{
+				Role:    "assistant",
+				Content: response,
+			}); err != nil {
+				return "", fmt.Errorf("failed to add role response to memory: %w", err)
+			}
+		}
+
+		return response, nil
+	}
+
+	// If tools are available and plan approval is required, generate an execution plan
+	if len(a.tools) > 0 && a.requirePlanApproval {
+		return a.runWithExecutionPlan(ctx, input)
+	}
+
+	// Otherwise, run without an execution plan
+	return a.runWithoutExecutionPlan(ctx, input)
+}
+
+// extractPlanAction attempts to extract a plan action from the user input
+// Returns taskID, action, and remaining input
+func (a *Agent) extractPlanAction(input string) (string, string, string) {
+	// This is a placeholder implementation
+	// In a real implementation, you would use NLP or pattern matching to extract plan actions
+	return "", "", input
+}
+
+// handlePlanAction handles actions related to an existing plan
+func (a *Agent) handlePlanAction(ctx context.Context, taskID, action, input string) (string, error) {
+	a.plansMutex.RLock()
+	plan, exists := a.plans[taskID]
+	a.plansMutex.RUnlock()
+
+	if !exists {
+		return "", fmt.Errorf("plan with task ID %s not found", taskID)
+	}
+
+	switch action {
+	case "approve":
+		return a.approvePlan(ctx, plan)
+	case "modify":
+		return a.modifyPlan(ctx, plan, input)
+	case "cancel":
+		return a.cancelPlan(plan)
+	case "status":
+		return a.getPlanStatus(plan)
+	default:
+		return "", fmt.Errorf("unknown plan action: %s", action)
+	}
+}
+
+// approvePlan approves and executes a plan
+func (a *Agent) approvePlan(ctx context.Context, plan *ExecutionPlan) (string, error) {
+	plan.UserApproved = true
+	plan.Status = StatusApproved
+
+	// Add the approval to memory
+	if a.memory != nil {
+		if err := a.memory.AddMessage(ctx, interfaces.Message{
+			Role:    "user",
+			Content: "I approve the plan. Please proceed with execution.",
+		}); err != nil {
+			return "", fmt.Errorf("failed to add approval to memory: %w", err)
+		}
+	}
+
+	// Execute the plan
+	result, err := a.ExecutePlan(ctx, plan)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute plan: %w", err)
+	}
+
+	// Add the execution result to memory
+	if a.memory != nil {
+		if err := a.memory.AddMessage(ctx, interfaces.Message{
+			Role:    "assistant",
+			Content: result,
+		}); err != nil {
+			return "", fmt.Errorf("failed to add execution result to memory: %w", err)
+		}
+	}
+
+	return result, nil
+}
+
+// modifyPlan modifies a plan based on user input
+func (a *Agent) modifyPlan(ctx context.Context, plan *ExecutionPlan, input string) (string, error) {
+	// Add the modification request to memory
+	if a.memory != nil {
+		if err := a.memory.AddMessage(ctx, interfaces.Message{
+			Role:    "user",
+			Content: "I'd like to modify the plan: " + input,
+		}); err != nil {
+			return "", fmt.Errorf("failed to add modification request to memory: %w", err)
+		}
+	}
+
+	// Modify the plan
+	modifiedPlan, err := a.ModifyExecutionPlan(ctx, plan, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to modify plan: %w", err)
+	}
+
+	// Update the plan in the map
+	a.plansMutex.Lock()
+	a.plans[modifiedPlan.TaskID] = modifiedPlan
+	a.plansMutex.Unlock()
+
+	// Format the modified plan
+	formattedPlan := FormatExecutionPlan(modifiedPlan)
+
+	// Add the modified plan to memory
+	if a.memory != nil {
+		if err := a.memory.AddMessage(ctx, interfaces.Message{
+			Role:    "assistant",
+			Content: "I've updated the execution plan based on your feedback:\n\n" + formattedPlan + "\nDo you approve this plan? You can modify it further if needed.",
+		}); err != nil {
+			return "", fmt.Errorf("failed to add modified plan to memory: %w", err)
+		}
+	}
+
+	return "I've updated the execution plan based on your feedback:\n\n" + formattedPlan + "\nDo you approve this plan? You can modify it further if needed.", nil
+}
+
+// cancelPlan cancels a plan
+func (a *Agent) cancelPlan(plan *ExecutionPlan) (string, error) {
+	a.CancelPlan(plan)
+
+	return "Plan cancelled. What would you like to do instead?", nil
+}
+
+// getPlanStatus returns the status of a plan
+func (a *Agent) getPlanStatus(plan *ExecutionPlan) (string, error) {
+	status := a.GetPlanStatus(plan)
+	formattedPlan := FormatExecutionPlan(plan)
+
+	return fmt.Sprintf("Current plan status: %s\n\n%s", status, formattedPlan), nil
+}
+
+// runWithExecutionPlan runs the agent with an execution plan
+func (a *Agent) runWithExecutionPlan(ctx context.Context, input string) (string, error) {
+	// Generate an execution plan
+	plan, err := a.GenerateExecutionPlan(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate execution plan: %w", err)
+	}
+
+	// Store the plan
+	a.plansMutex.Lock()
+	a.plans[plan.TaskID] = plan
+	a.plansMutex.Unlock()
+
+	// Format the plan for display
+	formattedPlan := FormatExecutionPlan(plan)
+
+	// Add the plan to memory
+	if a.memory != nil {
+		if err := a.memory.AddMessage(ctx, interfaces.Message{
+			Role:    "assistant",
+			Content: "I've created an execution plan for your request:\n\n" + formattedPlan + "\nDo you approve this plan? You can modify it if needed.",
+		}); err != nil {
+			return "", fmt.Errorf("failed to add plan to memory: %w", err)
+		}
+	}
+
+	// Return the plan for user approval
+	return "I've created an execution plan for your request:\n\n" + formattedPlan + "\nDo you approve this plan? You can modify it if needed.", nil
+}
+
+// runWithoutExecutionPlan runs the agent without an execution plan
+func (a *Agent) runWithoutExecutionPlan(ctx context.Context, input string) (string, error) {
 	// Get conversation history if memory is available
 	var prompt string
 	if a.memory != nil {
@@ -137,10 +337,17 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 	// Generate response with tools if available
 	var response string
 	var err error
+
+	// Add system prompt as a generate option
+	generateOptions := []interfaces.GenerateOption{}
+	if a.systemPrompt != "" {
+		generateOptions = append(generateOptions, openai.WithSystemMessage(a.systemPrompt))
+	}
+
 	if len(a.tools) > 0 {
-		response, err = a.llm.GenerateWithTools(ctx, prompt, a.tools)
+		response, err = a.llm.GenerateWithTools(ctx, prompt, a.tools, generateOptions...)
 	} else {
-		response, err = a.llm.Generate(ctx, prompt)
+		response, err = a.llm.Generate(ctx, prompt, generateOptions...)
 	}
 
 	if err != nil {
@@ -169,6 +376,27 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 	return response, nil
 }
 
+// GetTaskByID returns a task by its ID
+func (a *Agent) GetTaskByID(taskID string) (*ExecutionPlan, bool) {
+	a.plansMutex.RLock()
+	defer a.plansMutex.RUnlock()
+
+	plan, exists := a.plans[taskID]
+	return plan, exists
+}
+
+// ListTasks returns a list of all tasks
+func (a *Agent) ListTasks() []*ExecutionPlan {
+	a.plansMutex.RLock()
+	defer a.plansMutex.RUnlock()
+
+	var tasks []*ExecutionPlan
+	for _, plan := range a.plans {
+		tasks = append(tasks, plan)
+	}
+	return tasks
+}
+
 // formatHistoryIntoPrompt formats conversation history into a prompt
 func formatHistoryIntoPrompt(history []interfaces.Message) string {
 	// Implementation depends on the LLM's expected format
@@ -183,4 +411,149 @@ func formatHistoryIntoPrompt(history []interfaces.Message) string {
 	}
 
 	return prompt
+}
+
+// ApproveExecutionPlan approves an execution plan for execution
+func (a *Agent) ApproveExecutionPlan(ctx context.Context, plan *ExecutionPlan) (string, error) {
+	return a.approvePlan(ctx, plan)
+}
+
+// ModifyExecutionPlan modifies an execution plan based on user input
+func (a *Agent) ModifyExecutionPlan(ctx context.Context, plan *ExecutionPlan, modifications string) (*ExecutionPlan, error) {
+	// Create a prompt for the LLM to modify the execution plan
+	prompt := fmt.Sprintf(`
+You are an AI assistant that modifies execution plans based on user feedback. 
+Here is the current execution plan:
+
+%s
+
+The user has requested the following modifications:
+%s
+
+Please modify the execution plan according to the user's request and return the updated plan in the same JSON format:
+{
+  "description": "High-level description of what the plan will accomplish",
+  "steps": [
+    {
+      "toolName": "Name of the tool to use",
+      "description": "Description of what this step will accomplish",
+      "input": "Input to provide to the tool",
+      "parameters": {
+        "param1": "value1",
+        "param2": "value2"
+      }
+    }
+  ]
+}
+
+Ensure that:
+1. Each step uses a valid tool from the list of available tools
+2. All required parameters for each tool are provided
+3. The plan is comprehensive and addresses all aspects of the user's request
+4. The plan is presented in valid JSON format
+
+Modified Execution Plan:
+`, FormatExecutionPlan(plan), modifications)
+
+	// Add system prompt as a generate option
+	generateOptions := []interfaces.GenerateOption{}
+	if a.systemPrompt != "" {
+		generateOptions = append(generateOptions, openai.WithSystemMessage(a.systemPrompt))
+	}
+
+	// Generate the modified execution plan using the LLM
+	response, err := a.llm.Generate(ctx, prompt, generateOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate modified execution plan: %w", err)
+	}
+
+	// Parse the modified execution plan from the LLM response
+	modifiedPlan, err := parseExecutionPlanFromResponse(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse modified execution plan: %w", err)
+	}
+
+	// Preserve the task ID from the original plan
+	modifiedPlan.TaskID = plan.TaskID
+	modifiedPlan.Status = StatusPendingApproval
+
+	return modifiedPlan, nil
+}
+
+// isAskingAboutRole determines if the user is asking about the agent's role or identity
+func (a *Agent) isAskingAboutRole(input string) bool {
+	// Convert input to lowercase for case-insensitive matching
+	lowerInput := strings.ToLower(input)
+
+	// Common phrases that indicate a user asking about the agent's role
+	roleQueries := []string{
+		"what are you",
+		"who are you",
+		"what is your role",
+		"what do you do",
+		"what can you do",
+		"what is your purpose",
+		"what is your function",
+		"tell me about yourself",
+		"introduce yourself",
+		"what are your capabilities",
+		"what are you designed to do",
+		"what's your job",
+		"what kind of assistant are you",
+		"your role",
+		"your expertise",
+		"what are you expert in",
+		"what are you specialized in",
+		"your specialty",
+		"what's your specialty",
+	}
+
+	// Check if any of the role query phrases are in the input
+	for _, query := range roleQueries {
+		if strings.Contains(lowerInput, query) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// generateRoleResponse creates a response based on the agent's system prompt
+func (a *Agent) generateRoleResponse() string {
+	// If the prompt is empty, return a generic response
+	if a.systemPrompt == "" || a.llm == nil {
+		return "I'm an AI assistant designed to help you with various tasks and answer your questions. How can I assist you today?"
+	}
+
+	// Create a prompt that asks the LLM to generate a role description based on the system prompt
+	prompt := fmt.Sprintf(`Based on the following system prompt that defines your role and capabilities, 
+generate a brief, natural-sounding response (3-5 sentences) introducing yourself to a user who asked what you can do.
+Do not directly quote from the system prompt, but create a conversational first-person response that captures your 
+purpose, expertise, and how you can help. The response should feel like a natural conversation, not like reading documentation.
+
+System prompt: 
+%s
+
+Your response should:
+1. Introduce yourself using first-person perspective
+2. Briefly explain your specialization or purpose
+3. Mention 2-3 key areas you can help with
+4. End with a friendly question about how you can assist the user
+
+Response:`, a.systemPrompt)
+
+	// Generate a response using the LLM with the system prompt as context
+	generateOptions := []interfaces.GenerateOption{}
+
+	// Use the same system prompt to ensure consistent persona
+	generateOptions = append(generateOptions, openai.WithSystemMessage(a.systemPrompt))
+
+	// Generate the response
+	response, err := a.llm.Generate(context.Background(), prompt, generateOptions...)
+	if err != nil {
+		// Fallback to a simple response in case of errors
+		return "I'm an AI assistant based on the role defined in my system prompt. How can I help you today?"
+	}
+
+	return response
 }
