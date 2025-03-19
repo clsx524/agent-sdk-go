@@ -15,6 +15,7 @@ type ConversationSummary struct {
 	llmClient       interfaces.LLM
 	maxBufferSize   int
 	summaryMessages map[string]interfaces.Message
+	summaryParams   map[string]interface{}
 	mu              sync.RWMutex
 }
 
@@ -28,6 +29,17 @@ func WithMaxBufferSize(size int) SummaryOption {
 	}
 }
 
+// WithSummaryLength sets the maximum word count target for summaries
+func WithSummaryLength(wordCount int) SummaryOption {
+	return func(c *ConversationSummary) {
+		// Store the word count in a new field
+		if c.summaryParams == nil {
+			c.summaryParams = make(map[string]interface{})
+		}
+		c.summaryParams["summaryLength"] = wordCount
+	}
+}
+
 // NewConversationSummary creates a new conversation summary memory
 func NewConversationSummary(llmClient interfaces.LLM, options ...SummaryOption) *ConversationSummary {
 	summary := &ConversationSummary{
@@ -35,6 +47,7 @@ func NewConversationSummary(llmClient interfaces.LLM, options ...SummaryOption) 
 		llmClient:       llmClient,
 		maxBufferSize:   10, // Default max buffer size
 		summaryMessages: make(map[string]interfaces.Message),
+		summaryParams:   make(map[string]interface{}),
 	}
 
 	for _, option := range options {
@@ -148,7 +161,16 @@ func (c *ConversationSummary) Clear(ctx context.Context) error {
 func (c *ConversationSummary) summarize(ctx context.Context, messages []interfaces.Message) (string, error) {
 	// Format messages for summarization
 	var sb strings.Builder
-	sb.WriteString("Summarize the following conversation in a concise summary (about 100 words maximum):\n\n")
+
+	// Get configured summary length or use default
+	summaryLength := 100
+	if c.summaryParams != nil {
+		if length, ok := c.summaryParams["summaryLength"].(int); ok {
+			summaryLength = length
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("Summarize the following conversation in a concise summary (about %d words maximum):\n\n", summaryLength))
 	for _, msg := range messages {
 		sb.WriteString(fmt.Sprintf("%s: %s\n", msg.Role, msg.Content))
 	}
