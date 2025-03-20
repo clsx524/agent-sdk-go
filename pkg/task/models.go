@@ -27,16 +27,23 @@ const (
 
 // Task represents an infrastructure task to be executed
 type Task struct {
-	ID          string                 `json:"id"`
-	Description string                 `json:"description"`
-	Status      Status                 `json:"status"`
-	Plan        *Plan                  `json:"plan,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	CompletedAt *time.Time             `json:"completed_at,omitempty"`
-	UserID      string                 `json:"user_id"`
-	Logs        []LogEntry             `json:"logs,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"` // For extensibility
+	ID             string                 `json:"id"`
+	Description    string                 `json:"description"`
+	Status         Status                 `json:"status"`
+	Title          string                 `json:"title,omitempty"`
+	TaskKind       string                 `json:"task_kind,omitempty"`
+	ConversationID string                 `json:"conversation_id,omitempty"`
+	Plan           *Plan                  `json:"plan,omitempty"`
+	Steps          []Step                 `json:"steps,omitempty"` // Direct access to steps
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
+	StartedAt      *time.Time             `json:"started_at,omitempty"`
+	CompletedAt    *time.Time             `json:"completed_at,omitempty"`
+	UserID         string                 `json:"user_id"`
+	Logs           []LogEntry             `json:"logs,omitempty"`
+	Requirements   interface{}            `json:"requirements,omitempty"` // JSON of TaskRequirements
+	Feedback       string                 `json:"feedback,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"` // For extensibility
 }
 
 // Plan represents the execution plan for a task
@@ -58,6 +65,8 @@ type Step struct {
 	Order       int                    `json:"order"`
 	StartedAt   *time.Time             `json:"started_at,omitempty"`
 	CompletedAt *time.Time             `json:"completed_at,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Output      string                 `json:"output,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -65,6 +74,7 @@ type Step struct {
 type LogEntry struct {
 	ID        string    `json:"id"`
 	TaskID    string    `json:"task_id"`
+	StepID    string    `json:"step_id,omitempty"` // Optional reference to a specific step
 	Message   string    `json:"message"`
 	Level     string    `json:"level"` // info, warning, error
 	Timestamp time.Time `json:"timestamp"`
@@ -74,6 +84,8 @@ type LogEntry struct {
 type CreateTaskRequest struct {
 	Description string                 `json:"description"`
 	UserID      string                 `json:"user_id"`
+	Title       string                 `json:"title,omitempty"`
+	TaskKind    string                 `json:"task_kind,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -85,7 +97,7 @@ type ApproveTaskPlanRequest struct {
 
 // TaskUpdate represents an update to a task
 type TaskUpdate struct {
-	Type        string `json:"type"` // add_step, modify_step, remove_step
+	Type        string `json:"type"` // add_step, modify_step, remove_step, add_comment, update_status
 	StepID      string `json:"step_id,omitempty"`
 	Description string `json:"description,omitempty"`
 	Status      string `json:"status,omitempty"`
@@ -93,8 +105,10 @@ type TaskUpdate struct {
 
 // TaskFilter represents filters for querying tasks
 type TaskFilter struct {
-	UserID        string     `json:"user_id,omitempty"`
-	Status        []Status   `json:"status,omitempty"`
-	CreatedAfter  *time.Time `json:"created_after,omitempty"`
-	CreatedBefore *time.Time `json:"created_before,omitempty"`
+	UserID         string     `json:"user_id,omitempty"`
+	ConversationID string     `json:"conversation_id,omitempty"`
+	Status         []Status   `json:"status,omitempty"`
+	TaskKind       string     `json:"task_kind,omitempty"`
+	CreatedAfter   *time.Time `json:"created_after,omitempty"`
+	CreatedBefore  *time.Time `json:"created_before,omitempty"`
 }

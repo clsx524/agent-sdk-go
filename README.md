@@ -1,31 +1,49 @@
 # ![Ingenimax](/docs/img/logo-header.png#gh-light-mode-only) ![Ingenimax](/docs/img/logo-header-inverted.png#gh-dark-mode-only)
 
-# Agent SDK for Go
+# Agent Go SDK
 
-A flexible and extensible SDK for building AI agents in Go.
-
-## Overview
-
-The Agent SDK provides a comprehensive framework for building AI-powered agents in Go. It offers a modular architecture that allows you to easily integrate with various LLM providers, memory systems, vector stores, and tools.
+A Go-based SDK for building AI agents with various capabilities like memory, tools, LLM integration, and more.
 
 ## Features
 
-- **Multiple LLM Providers**: Support for OpenAI, Anthropic, and Azure OpenAI
-- **Memory Management**: Conversation history and context management
-- **Tool Integration**: Easily extend your agent with custom tools
-- **Vector Store Integration**: Connect to Weaviate, Pinecone, and other vector databases
-- **Tracing and Observability**: Built-in support for Langfuse and OpenTelemetry
-- **Multi-tenancy**: Support for multiple organizations and users
-- **Guardrails**: Safety mechanisms to ensure responsible AI usage
-- **Execution Plans**: Allow users to review and modify tool execution plans before execution
+- 🧠 **Multiple LLM Providers**: Integration with OpenAI, Anthropic, and more
+- 🔧 **Extensible Tools System**: Easily add capabilities to your agents
+- 📝 **Memory Management**: Store and retrieve conversation history
+- 🔍 **Vector Store Integration**: Semantic search capabilities
+- 🛠️ **Task Execution**: Plan and execute complex tasks
+- 🚦 **Guardrails**: Safety mechanisms for responsible AI
+- 📈 **Observability**: Tracing and logging for debugging
+- 🏢 **Multi-tenancy**: Support for multiple organizations
 
-## Installation
+## Getting Started
+
+### Prerequisites
+
+- Go 1.21+
+- Redis (optional, for distributed memory)
+
+### Installation
+
+Add the SDK to your Go project:
 
 ```bash
 go get github.com/Ingenimax/agent-sdk-go
 ```
 
-## Quick Start
+### Configuration
+
+The SDK uses environment variables for configuration. Key variables include:
+
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `OPENAI_MODEL`: The model to use (e.g., gpt-4-turbo)
+- `LOG_LEVEL`: Logging level (debug, info, warn, error)
+- `REDIS_ADDRESS`: Redis server address (if using Redis for memory)
+
+See `.env.example` for a complete list of configuration options.
+
+## Usage Examples
+
+### Creating a Simple Agent
 
 ```go
 package main
@@ -33,91 +51,95 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/agent"
-	"github.com/Ingenimax/agent-sdk-go/pkg/config"
 	"github.com/Ingenimax/agent-sdk-go/pkg/llm/openai"
 	"github.com/Ingenimax/agent-sdk-go/pkg/memory"
 )
 
 func main() {
-	// Get configuration
-	cfg := config.Get()
-
 	// Create OpenAI client
-	openaiClient := openai.NewClient(cfg.LLM.OpenAI.APIKey)
+	openaiClient := openai.NewClient("your-api-key")
+
+	// Create a memory store
+	memoryStore := memory.NewConversationBuffer()
 
 	// Create a new agent
-	agent, err := agent.NewAgent(
+	agentInstance, err := agent.NewAgent(
 		agent.WithLLM(openaiClient),
-		agent.WithMemory(memory.NewConversationBuffer()),
+		agent.WithMemory(memoryStore),
 		agent.WithSystemPrompt("You are a helpful AI assistant."),
 	)
 	if err != nil {
-		log.Fatalf("Failed to create agent: %v", err)
+		panic(err)
 	}
 
 	// Run the agent
-	response, err := agent.Run(context.Background(), "What is the capital of France?")
+	response, err := agentInstance.Run(context.Background(), "What is the capital of France?")
 	if err != nil {
-		log.Fatalf("Failed to run agent: %v", err)
+		panic(err)
 	}
 
 	fmt.Println(response)
 }
 ```
 
-## Configuration
+### Adding Tools to an Agent
 
-The SDK uses environment variables for configuration. See [Environment Variables](docs/environment_variables.md) for a complete list.
+```go
+import (
+	"github.com/Ingenimax/agent-sdk-go/pkg/tools"
+	"github.com/Ingenimax/agent-sdk-go/pkg/tools/websearch"
+)
 
-## Examples
+// Create a tools registry
+toolRegistry := tools.NewRegistry()
 
-Check out the [examples](cmd/examples) directory for more detailed examples:
+// Add the web search tool
+searchTool := websearch.New(
+	"your-google-api-key",
+	"your-search-engine-id",
+)
+toolRegistry.Register(searchTool)
 
-- [Simple Agent](cmd/examples/simple_agent): Basic agent setup
-- [LLM Providers](cmd/examples/llm): Using different LLM providers
-- [Memory Systems](cmd/examples/memory): Working with different memory systems
-- [Vector Stores](cmd/examples/vectorstore): Integrating with vector databases
-- [Tracing](cmd/examples/tracing): Adding observability to your agent
-- [Orchestration](cmd/examples/orchestration): Coordinating multiple agents
-- [Guardrails](cmd/examples/guardrails): Adding safety mechanisms
-- [Embedding](cmd/examples/embedding): Working with embeddings
-- [Context](cmd/examples/context): Managing context in conversations
-- [Task Execution](cmd/examples/task_execution): Tasks execution
-- [Execution Plan](cmd/examples/execution_plan): Allowing users to review and modify execution plans
-- [API Server](cmd/examples/api_server): Implementing an API server with execution plan functionality
+// Create agent with tools
+agent, err := agent.NewAgent(
+	agent.WithLLM(openaiClient),
+	agent.WithMemory(memoryStore),
+	agent.WithTools(toolRegistry.List()...),
+	agent.WithSystemPrompt("You are a helpful AI assistant with web search abilities."),
+)
+```
 
-## Documentation
+### Using Execution Plans with Approval
 
-- [Agent](docs/agent.md): Core agent functionality
-- [LLM Providers](docs/llm.md): Language model integrations
-- [Memory](docs/memory.md): Conversation history management
-- [Tools](docs/tools.md): Extending agent capabilities
-- [Vector Store](docs/vectorstore.md): Semantic search and retrieval
-- [Tracing](docs/tracing.md): Observability and monitoring
-- [Guardrails](docs/guardrails.md): Safety and content filtering
-- [Environment Variables](docs/environment_variables.md): Configuration options
-- [Multitenancy](docs/multitenancy.md): Supporting multiple organizations
-- [Task](docs/task.md): Tasks execution
+```go
+// Create an agent that requires plan approval
+agent, err := agent.NewAgent(
+	agent.WithLLM(openaiClient),
+	agent.WithMemory(memoryStore),
+	agent.WithTools(toolRegistry.List()...),
+	agent.WithSystemPrompt("You can help with complex tasks that require planning."),
+	agent.WithRequirePlanApproval(true), // Enable execution plan workflow
+)
+
+// When the agent generates a plan, you can get it using ListTasks
+plans := agent.ListTasks()
+
+// Approve a plan by task ID
+response, err := agent.Run(ctx, fmt.Sprintf("I approve the execution plan for task %s", taskID))
+```
 
 ## Architecture
 
-The Agent SDK follows a modular architecture with the following key components:
+The SDK follows a modular architecture with these key components:
 
-- **Agent**: The core component that coordinates the LLM, memory, and tools
-- **LLM**: Interface to language model providers (OpenAI, Anthropic, etc.)
+- **Agent**: Coordinates the LLM, memory, and tools
+- **LLM**: Interface to language model providers
 - **Memory**: Stores conversation history and context
-- **Tools**: Extend the agent's capabilities with custom tools
-- **Vector Store**: Store and retrieve vector embeddings
-- **Data Store**: Persist data for the agent
-- **Tracing**: Monitor and debug agent behavior
-- **Guardrails**: Ensure safe and responsible AI usage
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **Tools**: Extend the agent's capabilities
+- **Vector Store**: For semantic search and retrieval
+- **Guardrails**: Ensures safe and responsible AI usage
 
 ## License
 

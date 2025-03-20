@@ -40,6 +40,10 @@ type TaskExecutor interface {
 	ExecuteTask(ctx context.Context, task *Task) error
 }
 
+//
+// INMEMORY TASK SERVICE IMPLEMENTATION
+//
+
 // InMemoryTaskService implements the Service interface with an in-memory storage
 type InMemoryTaskService struct {
 	tasks         map[string]*Task
@@ -462,8 +466,12 @@ func (s *InMemoryTaskService) handlePlanningFailure(task *Task, err error) {
 }
 
 // replanTask replans a task with feedback
-func (s *InMemoryTaskService) replanTask(_ context.Context, task *Task, feedback string) {
-	s.logger.Info(context.Background(), "Replanning task with feedback", map[string]interface{}{
+func (s *InMemoryTaskService) replanTask(ctx context.Context, task *Task, feedback string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	s.logger.Info(ctx, "Replanning task with feedback", map[string]interface{}{
 		"task_id":  task.ID,
 		"feedback": feedback,
 	})
@@ -476,14 +484,17 @@ func (s *InMemoryTaskService) replanTask(_ context.Context, task *Task, feedback
 	updatedTask.Metadata["feedback"] = feedback
 
 	// Create a new plan with the feedback incorporated
-	ctx := context.Background()
 	planContent, err := s.planner.CreatePlan(ctx, &updatedTask)
 	if err != nil {
+		s.logger.Error(ctx, "Failed to create plan during replanning", map[string]interface{}{
+			"task_id": task.ID,
+			"error":   err.Error(),
+		})
 		s.handlePlanningFailure(task, err)
 		return
 	}
 
-	// Parse the generated plan and convert it to our task model
+	// Create a new plan
 	plan := &Plan{
 		ID:        uuid.New().String(),
 		TaskID:    task.ID,
@@ -491,19 +502,10 @@ func (s *InMemoryTaskService) replanTask(_ context.Context, task *Task, feedback
 		CreatedAt: time.Now(),
 	}
 
-	// Create a single default step for the plan
-	defaultStep := Step{
-		ID:          uuid.New().String(),
-		PlanID:      plan.ID,
-		Description: "Execute the revised deployment plan as described",
-		Status:      StepStatusPending,
-		Order:       1,
-	}
-	plan.Steps = append(plan.Steps, defaultStep)
-	s.logger.Info(ctx, "Created default step for revised plan", nil)
-
 	// Update task with plan
 	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	task.Plan = plan
 	task.Status = StatusApproval
 	task.UpdatedAt = time.Now()
@@ -518,14 +520,111 @@ func (s *InMemoryTaskService) replanTask(_ context.Context, task *Task, feedback
 	logEntry := LogEntry{
 		ID:        uuid.New().String(),
 		TaskID:    task.ID,
-		Message:   "Plan updated with feedback, awaiting approval",
+		Message:   "Task has been replanned with feedback",
 		Level:     "info",
 		Timestamp: time.Now(),
 	}
 	task.Logs = append(task.Logs, logEntry)
-	s.mutex.Unlock()
+}
 
-	s.logger.Info(ctx, "Task replanning completed", map[string]interface{}{
-		"task_id": task.ID,
-	})
+//
+// AGENT TASK SERVICE IMPLEMENTATION
+//
+
+// AgentTaskServiceInterface defines a standard interface that agents can implement
+// This provides a clear pattern for agents to follow and ensures consistency
+type AgentTaskServiceInterface[AgentTask any, AgentCreateRequest any, AgentApproveRequest any, AgentTaskUpdate any] interface {
+	// CreateTask creates a new task
+	CreateTask(ctx context.Context, req AgentCreateRequest) (AgentTask, error)
+
+	// GetTask gets a task by ID
+	GetTask(ctx context.Context, taskID string) (AgentTask, error)
+
+	// ListTasks returns all tasks for a user
+	ListTasks(ctx context.Context, userID string) ([]AgentTask, error)
+
+	// ApproveTaskPlan approves or rejects a task plan
+	ApproveTaskPlan(ctx context.Context, taskID string, req AgentApproveRequest) (AgentTask, error)
+
+	// UpdateTask updates an existing task with new steps or modifications
+	UpdateTask(ctx context.Context, taskID string, conversationID string, updates []AgentTaskUpdate) (AgentTask, error)
+
+	// AddTaskLog adds a log entry to a task
+	AddTaskLog(ctx context.Context, taskID string, message string, level string) error
+}
+
+// AgentTaskService provides a complete implementation of AgentTaskServiceInterface
+// Agents can use this directly without writing their own wrapper around AdapterService
+type AgentTaskService[AgentTask any, AgentCreateRequest any, AgentApproveRequest any, AgentTaskUpdate any] struct {
+	adapterService *AdapterService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]
+	logger         logging.Logger
+}
+
+// NewAgentTaskService creates a new service that agents can use with their own models
+func NewAgentTaskService[AgentTask any, AgentCreateRequest any, AgentApproveRequest any, AgentTaskUpdate any](
+	logger logging.Logger,
+	sdkService Service,
+	adapter TaskAdapter[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate],
+) *AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate] {
+	// Create adapter service
+	adapterService := NewAdapterService(logger, sdkService, adapter)
+
+	return &AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]{
+		adapterService: adapterService,
+		logger:         logger,
+	}
+}
+
+// CreateTask creates a new task
+func (s *AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]) CreateTask(
+	ctx context.Context,
+	req AgentCreateRequest,
+) (AgentTask, error) {
+	s.logger.Debug(ctx, "Creating new task via agent task service", nil)
+	return s.adapterService.CreateTask(ctx, req)
+}
+
+// GetTask retrieves a task by ID
+func (s *AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]) GetTask(
+	ctx context.Context,
+	taskID string,
+) (AgentTask, error) {
+	return s.adapterService.GetTask(ctx, taskID)
+}
+
+// ListTasks returns all tasks for a user
+func (s *AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]) ListTasks(
+	ctx context.Context,
+	userID string,
+) ([]AgentTask, error) {
+	return s.adapterService.ListTasks(ctx, userID)
+}
+
+// ApproveTaskPlan approves or rejects a task plan
+func (s *AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]) ApproveTaskPlan(
+	ctx context.Context,
+	taskID string,
+	req AgentApproveRequest,
+) (AgentTask, error) {
+	return s.adapterService.ApproveTaskPlan(ctx, taskID, req)
+}
+
+// UpdateTask updates an existing task
+func (s *AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]) UpdateTask(
+	ctx context.Context,
+	taskID string,
+	conversationID string,
+	updates []AgentTaskUpdate,
+) (AgentTask, error) {
+	return s.adapterService.UpdateTask(ctx, taskID, conversationID, updates)
+}
+
+// AddTaskLog adds a log entry to a task
+func (s *AgentTaskService[AgentTask, AgentCreateRequest, AgentApproveRequest, AgentTaskUpdate]) AddTaskLog(
+	ctx context.Context,
+	taskID string,
+	message string,
+	level string,
+) error {
+	return s.adapterService.AddTaskLog(ctx, taskID, message, level)
 }
