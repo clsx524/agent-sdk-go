@@ -127,7 +127,10 @@ agent, err := agent.NewAgent(
 plans := agent.ListTasks()
 
 // Approve a plan by task ID
-response, err := agent.Run(ctx, fmt.Sprintf("I approve the execution plan for task %s", taskID))
+response, err := agent.ApproveExecutionPlan(ctx, plans[0])
+
+// Or modify a plan with user feedback
+modifiedPlan, err := agent.ModifyExecutionPlan(ctx, plans[0], "Change step 2 to use a different tool")
 ```
 
 ## Architecture
@@ -140,6 +143,7 @@ The SDK follows a modular architecture with these key components:
 - **Tools**: Extend the agent's capabilities
 - **Vector Store**: For semantic search and retrieval
 - **Guardrails**: Ensures safe and responsible AI usage
+- **Execution Plan**: Manages planning, approval, and execution of complex tasks
 
 ## License
 
