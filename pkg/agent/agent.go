@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/executionplan"
@@ -13,18 +14,20 @@ import (
 
 // Agent represents an AI agent
 type Agent struct {
-	llm                 interfaces.LLM
-	memory              interfaces.Memory
-	tools               []interfaces.Tool
-	orgID               string
-	tracer              interfaces.Tracer
-	guardrails          interfaces.Guardrails
-	systemPrompt        string
-	name                string                   // Name of the agent, e.g., "PlatformOps", "Math", "Research"
-	requirePlanApproval bool                     // New field to control whether execution plans require approval
-	planStore           *executionplan.Store     // Store for execution plans
-	planGenerator       *executionplan.Generator // Generator for execution plans
-	planExecutor        *executionplan.Executor  // Executor for execution plans
+	llm                  interfaces.LLM
+	memory               interfaces.Memory
+	tools                []interfaces.Tool
+	orgID                string
+	tracer               interfaces.Tracer
+	guardrails           interfaces.Guardrails
+	systemPrompt         string
+	name                 string                   // Name of the agent, e.g., "PlatformOps", "Math", "Research"
+	requirePlanApproval  bool                     // New field to control whether execution plans require approval
+	planStore            *executionplan.Store     // Store for execution plans
+	planGenerator        *executionplan.Generator // Generator for execution plans
+	planExecutor         *executionplan.Executor  // Executor for execution plans
+	generatedAgentConfig *AgentConfig
+	generatedTaskConfigs TaskConfigs
 }
 
 // Option represents an option for configuring an agent
@@ -93,6 +96,14 @@ func WithName(name string) Option {
 	}
 }
 
+// WithAgentConfig sets the agent configuration from a YAML config
+func WithAgentConfig(config AgentConfig, variables map[string]string) Option {
+	return func(a *Agent) {
+		systemPrompt := FormatSystemPromptFromConfig(config, variables)
+		a.systemPrompt = systemPrompt
+	}
+}
+
 // NewAgent creates a new agent with the given options
 func NewAgent(options ...Option) (*Agent, error) {
 	agent := &Agent{
@@ -114,6 +125,74 @@ func NewAgent(options ...Option) (*Agent, error) {
 	agent.planExecutor = executionplan.NewExecutor(agent.tools)
 
 	return agent, nil
+}
+
+// NewAgentWithAutoConfig creates a new agent with automatic configuration generation
+// based on the system prompt if explicit configuration is not provided
+func NewAgentWithAutoConfig(ctx context.Context, options ...Option) (*Agent, error) {
+	// First create an agent with the provided options
+	agent, err := NewAgent(options...)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the agent doesn't have a name, set a default one
+	if agent.name == "" {
+		agent.name = "Auto-Configured Agent"
+	}
+
+	// If the system prompt is provided but no configuration was explicitly set,
+	// generate configuration using the LLM
+	if agent.systemPrompt != "" {
+		// Generate agent and task configurations from the system prompt
+		agentConfig, taskConfigs, err := GenerateConfigFromSystemPrompt(ctx, agent.llm, agent.systemPrompt)
+		if err != nil {
+			// If we fail to generate configs, just continue with the manual system prompt
+			// We don't want to fail agent creation just because auto-config failed
+			return agent, nil
+		}
+
+		// Create a task configuration map
+		taskConfigMap := make(TaskConfigs)
+		for i, taskConfig := range taskConfigs {
+			taskName := fmt.Sprintf("auto_task_%d", i+1)
+			taskConfig.Agent = agent.name // Set the task to use this agent
+			taskConfigMap[taskName] = taskConfig
+		}
+
+		// Store generated configurations in agent so they can be accessed later
+		agent.generatedAgentConfig = &agentConfig
+		agent.generatedTaskConfigs = taskConfigMap
+	}
+
+	return agent, nil
+}
+
+// NewAgentFromConfig creates a new agent from a YAML configuration
+func NewAgentFromConfig(agentName string, configs AgentConfigs, variables map[string]string, options ...Option) (*Agent, error) {
+	config, exists := configs[agentName]
+	if !exists {
+		return nil, fmt.Errorf("agent configuration for %s not found", agentName)
+	}
+
+	// Add the agent config option
+	configOption := WithAgentConfig(config, variables)
+	nameOption := WithName(agentName)
+
+	// Combine all options
+	allOptions := append([]Option{configOption, nameOption}, options...)
+
+	return NewAgent(allOptions...)
+}
+
+// CreateAgentForTask creates a new agent for a specific task
+func CreateAgentForTask(taskName string, agentConfigs AgentConfigs, taskConfigs TaskConfigs, variables map[string]string, options ...Option) (*Agent, error) {
+	agentName, err := GetAgentForTask(taskConfigs, taskName)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewAgentFromConfig(agentName, agentConfigs, variables, options...)
 }
 
 // Run runs the agent with the given input
@@ -508,4 +587,51 @@ Response:`, agentName, a.systemPrompt, agentName)
 	}
 
 	return response
+}
+
+// ExecuteTaskFromConfig executes a task using its YAML configuration
+func (a *Agent) ExecuteTaskFromConfig(ctx context.Context, taskName string, taskConfigs TaskConfigs, variables map[string]string) (string, error) {
+	taskConfig, exists := taskConfigs[taskName]
+	if !exists {
+		return "", fmt.Errorf("task configuration for %s not found", taskName)
+	}
+
+	// Replace variables in the task description
+	description := taskConfig.Description
+	for key, value := range variables {
+		placeholder := fmt.Sprintf("{%s}", key)
+		description = strings.ReplaceAll(description, placeholder, value)
+	}
+
+	// Run the agent with the task description
+	result, err := a.Run(ctx, description)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute task %s: %w", taskName, err)
+	}
+
+	// If an output file is specified, write the result to the file
+	if taskConfig.OutputFile != "" {
+		outputPath := taskConfig.OutputFile
+		for key, value := range variables {
+			placeholder := fmt.Sprintf("{%s}", key)
+			outputPath = strings.ReplaceAll(outputPath, placeholder, value)
+		}
+
+		err := os.WriteFile(outputPath, []byte(result), 0644)
+		if err != nil {
+			return result, fmt.Errorf("failed to write output to file %s: %w", outputPath, err)
+		}
+	}
+
+	return result, nil
+}
+
+// GetGeneratedAgentConfig returns the automatically generated agent configuration, if any
+func (a *Agent) GetGeneratedAgentConfig() *AgentConfig {
+	return a.generatedAgentConfig
+}
+
+// GetGeneratedTaskConfigs returns the automatically generated task configurations, if any
+func (a *Agent) GetGeneratedTaskConfigs() TaskConfigs {
+	return a.generatedTaskConfigs
 }
