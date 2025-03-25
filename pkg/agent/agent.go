@@ -28,6 +28,7 @@ type Agent struct {
 	planExecutor         *executionplan.Executor  // Executor for execution plans
 	generatedAgentConfig *AgentConfig
 	generatedTaskConfigs TaskConfigs
+	responseFormat       *interfaces.ResponseFormat // Response format for the agent
 }
 
 // Option represents an option for configuring an agent
@@ -101,6 +102,13 @@ func WithAgentConfig(config AgentConfig, variables map[string]string) Option {
 	return func(a *Agent) {
 		systemPrompt := FormatSystemPromptFromConfig(config, variables)
 		a.systemPrompt = systemPrompt
+	}
+}
+
+// WithResponseFormat sets the response format for the agent
+func WithResponseFormat(formatType interfaces.ResponseFormat) Option {
+	return func(a *Agent) {
+		a.responseFormat = &formatType
 	}
 }
 
@@ -427,6 +435,11 @@ func (a *Agent) runWithoutExecutionPlan(ctx context.Context, input string) (stri
 	generateOptions := []interfaces.GenerateOption{}
 	if a.systemPrompt != "" {
 		generateOptions = append(generateOptions, openai.WithSystemMessage(a.systemPrompt))
+	}
+
+	// Add response format as a generate option if available
+	if a.responseFormat != nil {
+		generateOptions = append(generateOptions, openai.WithResponseFormat(*a.responseFormat))
 	}
 
 	if len(a.tools) > 0 {
