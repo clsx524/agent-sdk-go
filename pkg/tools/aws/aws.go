@@ -17,7 +17,8 @@ import (
 
 // Tool implements an AWS provider tool
 type Tool struct {
-	config aws.Config
+	config   aws.Config
+	viewOnly bool
 }
 
 // Option represents an option for configuring the tool
@@ -27,6 +28,13 @@ type Option func(*Tool)
 func WithConfig(cfg aws.Config) Option {
 	return func(t *Tool) {
 		t.config = cfg
+	}
+}
+
+// Add protection to the tool, so the agent can only view the resources of the organization, but not modify them
+func WithViewOnly(viewOnly bool) Option {
+	return func(t *Tool) {
+		t.viewOnly = viewOnly
 	}
 }
 
@@ -72,6 +80,7 @@ func (t *Tool) Parameters() map[string]interfaces.ParameterSpec {
 			Type:        "string",
 			Description: "The action to perform",
 			Required:    true,
+			Enum:        []interface{}{"list_buckets", "create_bucket", "delete_bucket", "list_instances", "start_instance", "stop_instance"},
 		},
 		"params": {
 			Type:        "object",
@@ -175,6 +184,10 @@ func (t *Tool) listBuckets(ctx context.Context, client *s3.Client) (string, erro
 
 // createBucket creates an S3 bucket
 func (t *Tool) createBucket(ctx context.Context, client *s3.Client, params map[string]interface{}) (string, error) {
+	if t.viewOnly {
+		return "", fmt.Errorf("you are not allowed to create buckets")
+	}
+
 	// Get bucket name
 	name, ok := params["name"].(string)
 	if !ok || name == "" {
@@ -194,6 +207,10 @@ func (t *Tool) createBucket(ctx context.Context, client *s3.Client, params map[s
 
 // deleteBucket deletes an S3 bucket
 func (t *Tool) deleteBucket(ctx context.Context, client *s3.Client, params map[string]interface{}) (string, error) {
+	if t.viewOnly {
+		return "", fmt.Errorf("you are not allowed to delete buckets")
+	}
+
 	// Get bucket name
 	name, ok := params["name"].(string)
 	if !ok || name == "" {
@@ -266,6 +283,10 @@ func (t *Tool) listInstances(ctx context.Context, client *ec2.Client) (string, e
 
 // startInstance starts an EC2 instance
 func (t *Tool) startInstance(ctx context.Context, client *ec2.Client, params map[string]interface{}) (string, error) {
+	if t.viewOnly {
+		return "", fmt.Errorf("you are not allowed to start instances")
+	}
+
 	// Get instance ID
 	id, ok := params["instance_id"].(string)
 	if !ok || id == "" {
@@ -285,6 +306,10 @@ func (t *Tool) startInstance(ctx context.Context, client *ec2.Client, params map
 
 // stopInstance stops an EC2 instance
 func (t *Tool) stopInstance(ctx context.Context, client *ec2.Client, params map[string]interface{}) (string, error) {
+	if t.viewOnly {
+		return "", fmt.Errorf("you are not allowed to stop instances")
+	}
+
 	// Get instance ID
 	id, ok := params["instance_id"].(string)
 	if !ok || id == "" {
@@ -300,4 +325,9 @@ func (t *Tool) stopInstance(ctx context.Context, client *ec2.Client, params map[
 	}
 
 	return fmt.Sprintf("Instance '%s' stopped successfully", id), nil
+}
+
+// Execute implements the interfaces.Tool interface
+func (t *Tool) Execute(ctx context.Context, input string) (string, error) {
+	return t.Run(ctx, input)
 }

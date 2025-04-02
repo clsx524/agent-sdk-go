@@ -222,6 +222,9 @@ func (c *OpenAIClient) GenerateWithTools(ctx context.Context, prompt string, too
 					properties[name].(map[string]interface{})["items"].(map[string]interface{})["enum"] = param.Items.Enum
 				}
 			}
+			if param.Enum != nil {
+				properties[name].(map[string]interface{})["enum"] = param.Enum
+			}
 		}
 
 		openaiTools[i] = openai.Tool{
