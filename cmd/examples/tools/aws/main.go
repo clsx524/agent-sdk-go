@@ -50,6 +50,7 @@ func main() {
 	awsTool, err := awstool.New(
 		awstool.WithConfig(awsCfg),
 		awstool.WithViewOnly(true),
+		awstool.WithRestrictedServices([]string{"s3", "eks"}),
 	)
 
 	if err != nil {
