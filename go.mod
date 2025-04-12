@@ -7,7 +7,12 @@ toolchain go1.23.7
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.9
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.62
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.209.0
+	github.com/aws/aws-sdk-go-v2/service/eks v1.35.0
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.49.0
+	github.com/aws/aws-sdk-go-v2/service/rds v1.69.0
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.35.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.2
 	github.com/go-openapi/strfmt v0.23.0
 	github.com/go-redis/redis/v8 v8.11.5
@@ -37,7 +42,6 @@ require (
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.62 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
@@ -76,6 +80,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 // indirect
 	github.com/henomis/restclientgo v1.2.0 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

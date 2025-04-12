@@ -25,6 +25,8 @@ github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.34 h1:ZNTqv4nIdE/DiBfUUfXcLZ/Spcu
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.34/go.mod h1:zf7Vcd1ViW7cPqYWEHLHJkS50X0JS2IKz9Cgaj6ugrs=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.209.0 h1:WpLv8X3/Ct0ZRvx8QL91V9ndnIOi1WDfz0+F4ZEKwns=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.209.0/go.mod h1:ouvGEfHbLaIlWwpDpOVWPWR+YwO0HDv3vm5tYLq8ImY=
+github.com/aws/aws-sdk-go-v2/service/eks v1.35.0 h1:F8gjfepPEKwd5uUXKMS3jScqF0BFwy0tgDZx0P7Dp6Q=
+github.com/aws/aws-sdk-go-v2/service/eks v1.35.0/go.mod h1:37gPHPMsqDU5+xlvwe5DHL3RGMXZ7hCNKjpCNFkNhfE=
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3 h1:eAh2A4b5IzM/lum78bZ590jy36+d/aFLgKF/4Vd1xPE=
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3/go.mod h1:0yKJC/kb8sAnmlYa6Zs3QVYqaC8ug2AbnNChv5Ox3uA=
 github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.7.0 h1:lguz0bmOoGzozP9XfRJR1QIayEYo+2vP/No3OfLF0pU=
@@ -33,6 +35,12 @@ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 h1:dM9/92u2
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15/go.mod h1:SwFBy2vjtA0vZbjjaFtfN045boopadnoVPhu4Fv66vY=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.15 h1:moLQUoVq91LiqT1nbvzDukyqAlCv89ZmwaHw/ZFlFZg=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.15/go.mod h1:ZH34PJUc8ApjBIfgQCFvkWcUDBtl/WTD+uiYHjd8igA=
+github.com/aws/aws-sdk-go-v2/service/lambda v1.49.0 h1:Gqhvb4UYaWAJna8hSboGvR0dh/vJ8dVV2JoH6ZlLeIM=
+github.com/aws/aws-sdk-go-v2/service/lambda v1.49.0/go.mod h1:asILyVktjp+c4E17zvGpNRsQttnhUBIrIXZbnVY2lr4=
+github.com/aws/aws-sdk-go-v2/service/rds v1.69.0 h1:vnB7v2ZiKOYOXcu1xamRx9OyPJW9daWXUbysKrY3V/A=
+github.com/aws/aws-sdk-go-v2/service/rds v1.69.0/go.mod h1:N/ijzTwR4cOG2P8Kvos/QOCetpDTtconhvDOheqnrTw=
+github.com/aws/aws-sdk-go-v2/service/route53 v1.35.0 h1:oLF5NzZVSoYtwyQvcmN76n6K9mXGKrgclHqEUVWFohc=
+github.com/aws/aws-sdk-go-v2/service/route53 v1.35.0/go.mod h1:hoA+M4PGnKbyryQ+Owi/G9rnFTg0FcOq+PBjTDyFeHY=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.78.2 h1:jIiopHEV22b4yQP2q36Y0OmwLbsxNWdWwfZRR5QRRO4=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.78.2/go.mod h1:U5SNqwhXB3Xe6F47kXvWihPl/ilGaEDe8HD/50Z9wxc=
 github.com/aws/aws-sdk-go-v2/service/sso v1.25.1 h1:8JdC7Gr9NROg1Rusk25IcZeTO59zLxsKgE0gkh5O6h0=
@@ -166,6 +174,10 @@ github.com/henomis/restclientgo v1.2.0/go.mod h1:xIeTCu2ZstvRn0fCukNpzXLN3m/kRTU
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/jarcoal/httpmock v1.3.1 h1:iUx3whfZWVf3jT01hQTO/Eo5sAYtB2/rqaUuOtpInww=
 github.com/jarcoal/httpmock v1.3.1/go.mod h1:3yb8rc4BI7TCBhFY8ng0gjuLKJNquuDNiPaZjnENuYg=
+github.com/jmespath/go-jmespath v0.4.0 h1:BEgLn5cpjn8UN1mAw4NjwDrS35OdebyEtFe+9YPoQUg=
+github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
+github.com/jmespath/go-jmespath/internal/testify v1.5.1 h1:shLQSRRSCCPj3f2gpwzGwWFoC7ycTf1rcQZHOlsJ6N8=
+github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
 github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
