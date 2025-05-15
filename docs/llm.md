@@ -174,6 +174,50 @@ WithPresencePenalty(0.0)
 
 // StopSequences specifies sequences that stop generation
 WithStopSequences([]string{"###"})
+
+// Reasoning controls how the model explains its thinking
+// Options: "none", "minimal", "comprehensive"
+WithReasoning("minimal")
+```
+
+### Reasoning Levels
+
+The reasoning feature allows you to control how extensively the model explains its thought process:
+
+- **none**: The model provides direct, concise answers without explaining its reasoning or showing calculations. This produces the shortest responses.
+- **minimal**: The model briefly explains its thought process along with the answer, showing basic working but keeping explanations concise.
+- **comprehensive**: The model provides a detailed step-by-step explanation of its reasoning process with thorough explanations of each step.
+
+Example:
+
+```go
+// Generate with minimal reasoning
+response, err := client.Generate(
+    context.Background(),
+    "What is the probability of rolling a sum of 7 with two standard dice?",
+    openai.WithReasoning("minimal"),
+)
+
+// Generate with comprehensive reasoning using Chat method
+messages := []llm.Message{
+    {
+        Role:    "system",
+        Content: "You are a helpful math tutor.",
+    },
+    {
+        Role:    "user",
+        Content: "Explain the Pythagorean theorem.",
+    },
+}
+
+response, err := client.Chat(
+    context.Background(),
+    messages,
+    &llm.GenerateParams{
+        Temperature: 0.3,
+        Reasoning:   "comprehensive",
+    },
+)
 ```
 
 ### Provider-Specific Options
@@ -189,6 +233,9 @@ openai.WithBaseURL("https://api.openai.com/v1")
 
 // Timeout specifies the request timeout
 openai.WithTimeout(60 * time.Second)
+
+// Reasoning controls how the model explains its thinking
+openai.WithReasoning("comprehensive") // Options: "none", "minimal", "comprehensive"
 ```
 
 #### Anthropic
@@ -202,18 +249,10 @@ anthropic.WithBaseURL("https://api.anthropic.com")
 
 // Timeout specifies the request timeout
 anthropic.WithTimeout(60 * time.Second)
+
+// Reasoning controls how the model explains its thinking
+anthropic.WithReasoning("comprehensive") // Options: "none", "minimal", "comprehensive"
 ```
-
-#### Azure OpenAI
-
-```go
-// APIVersion specifies the API version to use
-azure.WithAPIVersion("2023-05-15")
-
-// Timeout specifies the request timeout
-azure.WithTimeout(60 * time.Second)
-```
-
 ## Multi-tenancy with LLM Providers
 
 When using LLM providers with multi-tenancy, you can specify the organization ID:
@@ -259,7 +298,7 @@ func (l *CustomLLM) Generate(ctx context.Context, prompt string, options ...inte
     for _, option := range options {
         option(opts)
     }
-    
+
     // Implement your generation logic here
     return "Generated text", nil
 }
@@ -271,7 +310,7 @@ func (l *CustomLLM) GenerateWithTools(ctx context.Context, prompt string, tools 
     for _, option := range options {
         option(opts)
     }
-    
+
     // Implement your generation with tools logic here
     return "Generated text with tools", nil
 }
@@ -356,4 +395,4 @@ func main() {
         log.Fatalf("Failed to generate chat completion: %v", err)
     }
     fmt.Println("Chat response:", chatResponse)
-} 
+}
