@@ -3,12 +3,6 @@
 <img src="/docs/img/logo-header-inverted.png#gh-dark-mode-only" alt="Ingenimax" width="600">
 </div>
 
-<div align="center">
-
-![GitHub stars](https://img.shields.io/github/stars/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub forks](https://img.shields.io/github/forks/Ingenimax/agent-sdk-go?style=flat-square)       ![Go version](https://img.shields.io/github/go-mod/go-version/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub license](https://img.shields.io/github/license/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub issues](https://img.shields.io/github/issues/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub pull requests](https://img.shields.io/github/issues-pr/Ingenimax/agent-sdk-go?style=flat-square)
-
-</div>
-
 # Agent Go SDK
 
 A powerful Go framework for building production-ready AI agents that seamlessly integrates memory management, tool execution, multi-LLM support, and enterprise features into a flexible, extensible architecture.
