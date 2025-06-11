@@ -5,7 +5,7 @@
 
 <div align="center">
 
-![GitHub stars](https://img.shields.io/github/stars/Ingenimax/agent-sdk-go?style=flat-square)  ![GitHub forks](https://img.shields.io/github/forks/Ingenimax/agent-sdk-go?style=flat-square)  ![Go version](https://img.shields.io/github/go-mod/go-version/Ingenimax/agent-sdk-go?style=flat-square)  ![GitHub license](https://img.shields.io/github/license/Ingenimax/agent-sdk-go?style=flat-square)  ![GitHub issues](https://img.shields.io/github/issues/Ingenimax/agent-sdk-go?style=flat-square)  ![GitHub pull requests](https://img.shields.io/github/issues-pr/Ingenimax/agent-sdk-go?style=flat-square)
+![GitHub stars](https://img.shields.io/github/stars/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub forks](https://img.shields.io/github/forks/Ingenimax/agent-sdk-go?style=flat-square)       ![Go version](https://img.shields.io/github/go-mod/go-version/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub license](https://img.shields.io/github/license/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub issues](https://img.shields.io/github/issues/Ingenimax/agent-sdk-go?style=flat-square)       ![GitHub pull requests](https://img.shields.io/github/issues-pr/Ingenimax/agent-sdk-go?style=flat-square)
 
 </div>
 
