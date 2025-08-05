@@ -7,10 +7,12 @@ import (
 	"strings"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/executionplan"
+	"github.com/Ingenimax/agent-sdk-go/pkg/grpc/client"
 	"github.com/Ingenimax/agent-sdk-go/pkg/interfaces"
 	"github.com/Ingenimax/agent-sdk-go/pkg/llm/openai"
 	"github.com/Ingenimax/agent-sdk-go/pkg/mcp"
 	"github.com/Ingenimax/agent-sdk-go/pkg/multitenancy"
+	"github.com/Ingenimax/agent-sdk-go/pkg/tools"
 	"github.com/Ingenimax/agent-sdk-go/pkg/tracing"
 )
 
@@ -19,6 +21,7 @@ type Agent struct {
 	llm                  interfaces.LLM
 	memory               interfaces.Memory
 	tools                []interfaces.Tool
+	subAgents            []*Agent               // Sub-agents that can be called as tools
 	orgID                string
 	tracer               interfaces.Tracer
 	guardrails           interfaces.Guardrails
@@ -35,6 +38,11 @@ type Agent struct {
 	llmConfig            *interfaces.LLMConfig
 	mcpServers           []interfaces.MCPServer // MCP servers for the agent
 	maxIterations        int                    // Maximum number of tool-calling iterations (default: 2)
+	
+	// Remote agent fields
+	isRemote     bool                     // Whether this is a remote agent
+	remoteURL    string                   // URL of the remote agent service
+	remoteClient *client.RemoteAgentClient // gRPC client for remote communication
 }
 
 // Option represents an option for configuring an agent
@@ -152,6 +160,31 @@ func WithMaxIterations(maxIterations int) Option {
 	}
 }
 
+// WithURL creates a remote agent that communicates via gRPC
+func WithURL(url string) Option {
+	return func(a *Agent) {
+		a.isRemote = true
+		a.remoteURL = url
+		// For remote agents, LLM is not required locally
+		a.llm = nil
+	}
+}
+
+// WithAgents sets the sub-agents that can be called as tools
+func WithAgents(subAgents ...*Agent) Option {
+	return func(a *Agent) {
+		a.subAgents = subAgents
+		// Automatically wrap sub-agents as tools
+		for _, subAgent := range subAgents {
+			agentTool := tools.NewAgentTool(subAgent)
+			
+			// Pass logger and tracer if available on parent agent
+			// Note: This will be set later in NewAgent after the agent is fully constructed
+			a.tools = append(a.tools, agentTool)
+		}
+	}
+}
+
 // NewAgent creates a new agent with the given options
 func NewAgent(options ...Option) (*Agent, error) {
 	agent := &Agent{
@@ -163,15 +196,61 @@ func NewAgent(options ...Option) (*Agent, error) {
 		option(agent)
 	}
 
-	// Validate required fields
-	if agent.llm == nil {
-		return nil, fmt.Errorf("LLM is required")
+	// Different validation for local vs remote agents
+	if agent.isRemote {
+		return validateRemoteAgent(agent)
+	} else {
+		return validateLocalAgent(agent)
 	}
+}
+
+// validateLocalAgent validates a local agent
+func validateLocalAgent(agent *Agent) (*Agent, error) {
+	// Validate required fields for local agents
+	if agent.llm == nil {
+		return nil, fmt.Errorf("LLM is required for local agents")
+	}
+
+	// Validate sub-agents if present
+	if len(agent.subAgents) > 0 {
+		// Check for circular dependencies
+		if err := agent.validateSubAgents(); err != nil {
+			return nil, fmt.Errorf("sub-agent validation failed: %w", err)
+		}
+		
+		// Validate agent tree depth (max 5 levels)
+		if err := validateAgentTree(agent, 5); err != nil {
+			return nil, fmt.Errorf("agent tree validation failed: %w", err)
+		}
+	}
+
+	// Configure sub-agent tools with logger and tracer
+	agent.configureSubAgentTools()
 
 	// Initialize execution plan components
 	agent.planStore = executionplan.NewStore()
 	agent.planGenerator = executionplan.NewGenerator(agent.llm, agent.tools, agent.systemPrompt)
 	agent.planExecutor = executionplan.NewExecutor(agent.tools)
+
+	return agent, nil
+}
+
+// validateRemoteAgent validates a remote agent
+func validateRemoteAgent(agent *Agent) (*Agent, error) {
+	// Validate required fields for remote agents
+	if agent.remoteURL == "" {
+		return nil, fmt.Errorf("URL is required for remote agents")
+	}
+	
+	// Initialize remote client
+	agent.remoteClient = client.NewRemoteAgentClient(client.RemoteAgentConfig{
+		URL: agent.remoteURL,
+	})
+
+	// Test connection and fetch metadata
+	if err := agent.initializeRemoteAgent(); err != nil {
+		return nil, fmt.Errorf("failed to initialize remote agent: %w", err)
+	}
 
 	return agent, nil
 }
@@ -255,6 +334,31 @@ func CreateAgentForTask(taskName string, agentConfigs AgentConfigs, taskConfigs 
 
 // Run runs the agent with the given input
 func (a *Agent) Run(ctx context.Context, input string) (string, error) {
+	// If this is a remote agent, delegate to remote execution
+	if a.isRemote {
+		return a.runRemote(ctx, input)
+	}
+
+	// Local agent execution
+	return a.runLocal(ctx, input)
+}
+
+// runRemote executes a remote agent via gRPC
+func (a *Agent) runRemote(ctx context.Context, input string) (string, error) {
+	if a.remoteClient == nil {
+		return "", fmt.Errorf("remote client not initialized")
+	}
+
+	// If orgID is set on the agent, add it to the context
+	if a.orgID != "" {
+		ctx = multitenancy.WithOrgID(ctx, a.orgID)
+	}
+
+	return a.remoteClient.Run(ctx, input)
+}
+
+// runLocal executes a local agent
+func (a *Agent) runLocal(ctx context.Context, input string) (string, error) {
 	// Inject agent name into context for tracing span naming
 	ctx = tracing.WithAgentName(ctx, a.name)
 
@@ -769,4 +873,62 @@ func (a *Agent) GetCapabilities() string {
 	}
 
 	return "A general-purpose AI agent"
+}
+
+// configureSubAgentTools configures sub-agent tools with logger and tracer from parent agent
+func (a *Agent) configureSubAgentTools() {
+	for _, tool := range a.tools {
+		// Check if this is an AgentTool by trying to cast it
+		if agentTool, ok := tool.(*tools.AgentTool); ok {
+			// Configure with parent agent's logger and tracer
+			if a.tracer != nil {
+				agentTool.WithTracer(a.tracer)
+			}
+			// Note: We could also add logger if we had access to it on the agent
+		}
+	}
+}
+
+// initializeRemoteAgent initializes the remote agent connection and fetches metadata
+func (a *Agent) initializeRemoteAgent() error {
+	// Connect to the remote agent
+	if err := a.remoteClient.Connect(); err != nil {
+		return fmt.Errorf("failed to connect to remote agent: %w", err)
+	}
+
+	// Fetch metadata if agent name or description is not set
+	if a.name == "" || a.description == "" {
+		metadata, err := a.remoteClient.GetMetadata(context.Background())
+		if err != nil {
+			// Don't fail if metadata fetch fails, just log and continue
+			fmt.Printf("Warning: failed to fetch metadata from remote agent %s: %v\n", a.remoteURL, err)
+		} else {
+			if a.name == "" {
+				a.name = metadata.Name
+			}
+			if a.description == "" {
+				a.description = metadata.Description
+			}
+		}
+	}
+
+	return nil
+}
+
+// IsRemote returns true if this is a remote agent
+func (a *Agent) IsRemote() bool {
+	return a.isRemote
+}
+
+// GetRemoteURL returns the URL of the remote agent (empty string if not remote)
+func (a *Agent) GetRemoteURL() string {
+	return a.remoteURL
+}
+
+// Disconnect closes the connection to a remote agent
+func (a *Agent) Disconnect() error {
+	if a.isRemote && a.remoteClient != nil {
+		return a.remoteClient.Disconnect()
+	}
+	return nil
 }
