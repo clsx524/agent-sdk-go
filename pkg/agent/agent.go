@@ -162,6 +162,7 @@ func WithMaxIterations(maxIterations int) Option {
 	}
 }
 
+
 // WithURL creates a remote agent that communicates via gRPC
 func WithURL(url string) Option {
 	return func(a *Agent) {
@@ -240,6 +241,7 @@ func validateLocalAgent(agent *Agent) (*Agent, error) {
 	agent.planStore = executionplan.NewStore()
 	agent.planGenerator = executionplan.NewGenerator(agent.llm, agent.tools, agent.systemPrompt)
 	agent.planExecutor = executionplan.NewExecutor(agent.tools)
+
 
 	return agent, nil
 }
@@ -539,6 +541,11 @@ func (a *Agent) runWithoutExecutionPlanWithTools(ctx context.Context, input stri
 
 	// Add max iterations option
 	generateOptions = append(generateOptions, interfaces.WithMaxIterations(a.maxIterations))
+
+	// Pass memory to LLM for tool call storage
+	if a.memory != nil && len(tools) > 0 {
+		generateOptions = append(generateOptions, interfaces.WithMemory(a.memory))
+	}
 
 	if len(tools) > 0 {
 		response, err = a.llm.GenerateWithTools(ctx, prompt, tools, generateOptions...)

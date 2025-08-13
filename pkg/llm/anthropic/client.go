@@ -867,6 +867,44 @@ func (c *AnthropicClient) GenerateWithTools(ctx context.Context, prompt string, 
 				"iteration": iteration + 1,
 			})
 			toolResult, err := selectedTool.Execute(ctx, string(toolCallJSON))
+			
+			// Store tool call and result in memory if provided
+			if params.Memory != nil {
+				if err != nil {
+					// Store failed tool call result
+					_ = params.Memory.AddMessage(ctx, interfaces.Message{
+						Role:       "assistant",
+						Content:    "",
+						ToolCalls: []interfaces.ToolCall{{
+							ID:        toolCall.ID,
+							Name:      toolName,
+							Arguments: string(toolCallJSON),
+						}},
+					})
+					_ = params.Memory.AddMessage(ctx, interfaces.Message{
+						Role:       "tool",
+						Content:    fmt.Sprintf("Error: %v", err),
+						ToolCallID: toolCall.ID,
+					})
+				} else {
+					// Store successful tool call and result
+					_ = params.Memory.AddMessage(ctx, interfaces.Message{
+						Role:       "assistant",
+						Content:    "",
+						ToolCalls: []interfaces.ToolCall{{
+							ID:        toolCall.ID,
+							Name:      toolName,
+							Arguments: string(toolCallJSON),
+						}},
+					})
+					_ = params.Memory.AddMessage(ctx, interfaces.Message{
+						Role:       "tool",
+						Content:    toolResult,
+						ToolCallID: toolCall.ID,
+					})
+				}
+			}
+			
 			if err != nil {
 				c.logger.Error(ctx, "Error executing tool", map[string]interface{}{
 					"toolName":  selectedTool.Name(),

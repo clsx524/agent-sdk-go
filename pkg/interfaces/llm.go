@@ -24,6 +24,7 @@ type GenerateOptions struct {
 	SystemMessage  string          // System message for chat models
 	ResponseFormat *ResponseFormat // Optional expected response format
 	MaxIterations  int             // Maximum number of tool-calling iterations (0 = use default)
+	Memory         Memory          // Optional memory for storing tool calls and results
 }
 
 type LLMConfig struct {
@@ -39,5 +40,12 @@ type LLMConfig struct {
 func WithMaxIterations(maxIterations int) GenerateOption {
 	return func(options *GenerateOptions) {
 		options.MaxIterations = maxIterations
+	}
+}
+
+// WithMemory creates a GenerateOption to set the memory for storing tool calls and results
+func WithMemory(memory Memory) GenerateOption {
+	return func(options *GenerateOptions) {
+		options.Memory = memory
 	}
 }
