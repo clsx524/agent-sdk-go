@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/Ingenimax/agent-sdk-go/pkg/grpc/pb"
@@ -74,11 +75,14 @@ func (r *RemoteAgentClient) Connect() error {
 	r.conn = conn
 	r.client = pb.NewAgentServiceClient(conn)
 
-	// Test the connection with a health check
+	// Test the connection with standard gRPC health check
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = r.client.Health(ctx, &pb.HealthRequest{})
+	healthClient := grpc_health_v1.NewHealthClient(conn)
+	_, err = healthClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{
+		Service: "", // Check the overall server health (empty string means overall server)
+	})
 	if err != nil {
 		if closeErr := r.conn.Close(); closeErr != nil {
 			// Log the close error but continue with the original error
