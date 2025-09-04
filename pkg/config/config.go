@@ -28,6 +28,18 @@ type Config struct {
 			BaseURL     string
 			Timeout     time.Duration
 		}
+
+		// Azure OpenAI configuration
+		AzureOpenAI struct {
+			APIKey       string
+			Temperature  float64
+			BaseURL      string
+			Region       string
+			ResourceName string
+			Deployment   string
+			APIVersion   string
+			Timeout      time.Duration
+		}
 	}
 
 	// Memory configuration
@@ -125,6 +137,18 @@ type AnthropicConfig struct {
 	Timeout     time.Duration
 }
 
+// AzureOpenAIConfig contains Azure OpenAI-specific configuration
+type AzureOpenAIConfig struct {
+	APIKey       string
+	Temperature  float64
+	BaseURL      string
+	Region       string
+	ResourceName string
+	Deployment   string
+	APIVersion   string
+	Timeout      time.Duration
+}
+
 // LoadFromEnv loads configuration from environment variables
 func LoadFromEnv() *Config {
 	config := &Config{}
@@ -192,6 +216,16 @@ func initLLMConfig(config *Config) {
 	config.LLM.Anthropic.Temperature = getEnvFloat("ANTHROPIC_TEMPERATURE", 0.7)
 	config.LLM.Anthropic.BaseURL = getEnvString("ANTHROPIC_BASE_URL", "")
 	config.LLM.Anthropic.Timeout = time.Duration(getEnvInt("ANTHROPIC_TIMEOUT", 60)) * time.Second
+
+	// Azure OpenAI defaults
+	config.LLM.AzureOpenAI.APIKey = getEnvString("AZURE_OPENAI_API_KEY", "")
+	config.LLM.AzureOpenAI.Temperature = getEnvFloat("AZURE_OPENAI_TEMPERATURE", 0.7)
+	config.LLM.AzureOpenAI.BaseURL = getEnvString("AZURE_OPENAI_BASE_URL", "")
+	config.LLM.AzureOpenAI.Region = getEnvString("AZURE_OPENAI_REGION", "")
+	config.LLM.AzureOpenAI.ResourceName = getEnvString("AZURE_OPENAI_RESOURCE_NAME", "")
+	config.LLM.AzureOpenAI.Deployment = getEnvString("AZURE_OPENAI_DEPLOYMENT", "")
+	config.LLM.AzureOpenAI.APIVersion = getEnvString("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
+	config.LLM.AzureOpenAI.Timeout = time.Duration(getEnvInt("AZURE_OPENAI_TIMEOUT", 60)) * time.Second
 }
 
 // getEnv gets an environment variable or returns a default value
