@@ -30,7 +30,7 @@ func TestFormatHistoryIntoPrompt(t *testing.T) {
 				{Role: "tool", Content: `{"query": "list all EKS clusters", "output": "eks-cluster-1"}`},
 				{Role: "assistant", Content: "You have eks-cluster-1 available"},
 			},
-			expected: "USER: list which clusters I have available\n\nASSISTANT: [AI reasoning: User is requesting a list of available clusters]\n\nTOOL: {\"query\": \"list all EKS clusters\", \"output\": \"eks-cluster-1\"}\n\nASSISTANT: You have eks-cluster-1 available",
+			expected: "USER: list which clusters I have available\n\nASSISTANT: [AI: reasoning: User is requesting a list of available clusters]\n\nTOOL: {\"query\": \"list all EKS clusters\", \"output\": \"eks-cluster-1\"}\n\nASSISTANT: You have eks-cluster-1 available",
 		},
 		{
 			name: "single message",

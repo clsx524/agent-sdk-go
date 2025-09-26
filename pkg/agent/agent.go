@@ -918,27 +918,38 @@ func summarizeStructuredResponse(jsonContent string) string {
 		return "[Generated structured response]"
 	}
 
-	// Extract common fields that might indicate the response type
-	if reasoning, ok := jsonMap["reasoning"].([]interface{}); ok && len(reasoning) > 0 {
-		if firstReason, ok := reasoning[0].(string); ok {
-			return fmt.Sprintf("[AI reasoning: %s]", firstReason)
+	// Convert JSON to human-readable format - works with any JSON structure
+	var parts []string
+
+	for key, value := range jsonMap {
+		switch v := value.(type) {
+		case string:
+			if v != "" && v != "null" {
+				parts = append(parts, fmt.Sprintf("%s: %s", key, v))
+			}
+		case []interface{}:
+			if len(v) > 0 {
+				if str, ok := v[0].(string); ok && str != "" {
+					parts = append(parts, fmt.Sprintf("%s: %s", key, str))
+				}
+			}
+		case bool:
+			parts = append(parts, fmt.Sprintf("%s: %t", key, v))
+		case float64, int:
+			parts = append(parts, fmt.Sprintf("%s: %v", key, v))
 		}
 	}
 
-	if question, ok := jsonMap["question"].(string); ok && question != "" {
-		return fmt.Sprintf("[AI asked: %s]", question)
+	if len(parts) == 0 {
+		return "[Generated structured response]"
 	}
 
-	if information_gathering_completed, ok := jsonMap["information_gathering_completed"].(bool); ok {
-		if information_gathering_completed {
-			return "[AI completed information gathering]"
-		} else {
-			return "[AI gathering information]"
-		}
+	// Limit to most important parts to keep summary concise
+	if len(parts) > 3 {
+		parts = parts[:3]
 	}
 
-	// Fallback to generic summary
-	return "[Generated structured response]"
+	return "[AI: " + strings.Join(parts, ", ") + "]"
 }
 
 // ApproveExecutionPlan approves an execution plan for execution
