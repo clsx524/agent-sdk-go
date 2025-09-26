@@ -884,9 +884,9 @@ func formatHistoryIntoPrompt(history []interfaces.Message) string {
 		// Handle assistant messages that contain structured JSON output
 		content := msg.Content
 		if msg.Role == "assistant" && isStructuredJSONResponse(content) {
-			// For structured JSON responses, summarize instead of showing full JSON
+			// For structured JSON responses, convert to human-readable format instead of showing full JSON
 			// This prevents LLM confusion that leads to concatenated JSON responses
-			content = summarizeStructuredResponse(content)
+			content = convertToHumanReadable(content)
 		}
 
 		// Add role marker and content
@@ -908,9 +908,9 @@ func isStructuredJSONResponse(content string) bool {
 	return strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")
 }
 
-// summarizeStructuredResponse converts a JSON response to a human-readable summary
+// convertToHumanReadable converts a JSON response to a human-readable format
 // to avoid confusing the LLM with raw JSON in conversation history
-func summarizeStructuredResponse(jsonContent string) string {
+func convertToHumanReadable(jsonContent string) string {
 	// Try to parse the JSON to extract key information
 	var jsonMap map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonContent), &jsonMap); err != nil {

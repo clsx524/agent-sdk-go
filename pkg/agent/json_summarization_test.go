@@ -45,7 +45,7 @@ func TestIsStructuredJSONResponse(t *testing.T) {
 	}
 }
 
-func TestSummarizeStructuredResponse(t *testing.T) {
+func TestConvertToHumanReadable(t *testing.T) {
 	tests := []struct {
 		name           string
 		json           string
@@ -104,21 +104,21 @@ func TestSummarizeStructuredResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := summarizeStructuredResponse(tt.json)
+			got := convertToHumanReadable(tt.json)
 
 			if got == "" {
-				t.Error("summarizeStructuredResponse() returned empty string")
+				t.Error("convertToHumanReadable() returned empty string")
 			}
 
 			for _, want := range tt.wantContains {
 				if !strings.Contains(got, want) {
-					t.Errorf("summarizeStructuredResponse() = %q, want to contain %q", got, want)
+					t.Errorf("convertToHumanReadable() = %q, want to contain %q", got, want)
 				}
 			}
 
 			for _, notWant := range tt.wantNotContain {
 				if strings.Contains(got, notWant) {
-					t.Errorf("summarizeStructuredResponse() = %q, want to NOT contain %q", got, notWant)
+					t.Errorf("convertToHumanReadable() = %q, want to NOT contain %q", got, notWant)
 				}
 			}
 
@@ -126,7 +126,7 @@ func TestSummarizeStructuredResponse(t *testing.T) {
 			if tt.name == "large object limited to 3 fields" {
 				commaCount := strings.Count(got, ",")
 				if commaCount > 2 {
-					t.Errorf("summarizeStructuredResponse() should limit to 3 fields (2 commas max), got %d commas", commaCount)
+					t.Errorf("convertToHumanReadable() should limit to 3 fields (2 commas max), got %d commas", commaCount)
 				}
 			}
 		})
