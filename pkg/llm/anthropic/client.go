@@ -512,7 +512,7 @@ Important instructions:
 	response := strings.Join(contentText, "\n")
 
 	// For structured output, prepend the opening brace that was used as prefill
-	if params.ResponseFormat != nil {
+	if params.ResponseFormat != nil && !strings.HasPrefix(strings.TrimSpace(response), "{") {
 		response = "{" + response
 	}
 
