@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -63,16 +64,16 @@ type Agent struct {
 	generatedTaskConfigs TaskConfigs
 	responseFormat       *interfaces.ResponseFormat // Response format for the agent
 	llmConfig            *interfaces.LLMConfig
-	mcpServers           []interfaces.MCPServer // MCP servers for the agent
-	lazyMCPConfigs       []LazyMCPConfig        // Lazy MCP server configurations
-	maxIterations        int                    // Maximum number of tool-calling iterations (default: 2)
+	mcpServers           []interfaces.MCPServer   // MCP servers for the agent
+	lazyMCPConfigs       []LazyMCPConfig          // Lazy MCP server configurations
+	maxIterations        int                      // Maximum number of tool-calling iterations (default: 2)
 	streamConfig         *interfaces.StreamConfig // Streaming configuration for the agent
 
 	// Remote agent fields
-	isRemote        bool                     // Whether this is a remote agent
-	remoteURL       string                   // URL of the remote agent service
-	remoteTimeout   time.Duration            // Timeout for remote agent operations
-	remoteClient    *client.RemoteAgentClient // gRPC client for remote communication
+	isRemote      bool                      // Whether this is a remote agent
+	remoteURL     string                    // URL of the remote agent service
+	remoteTimeout time.Duration             // Timeout for remote agent operations
+	remoteClient  *client.RemoteAgentClient // gRPC client for remote communication
 
 	// Custom function fields
 	customRunFunc       CustomRunFunction       // Custom run function to replace default behavior
@@ -880,8 +881,16 @@ func formatHistoryIntoPrompt(history []interfaces.Message) string {
 			roleMarker = strings.ToUpper(msg.Role)
 		}
 
+		// Handle assistant messages that contain structured JSON output
+		content := msg.Content
+		if msg.Role == "assistant" && isStructuredJSONResponse(content) {
+			// For structured JSON responses, convert to human-readable format instead of showing full JSON
+			// This prevents LLM confusion that leads to concatenated JSON responses
+			content = convertToHumanReadable(content)
+		}
+
 		// Add role marker and content
-		prompt += roleMarker + ": " + msg.Content
+		prompt += roleMarker + ": " + content
 
 		// Add double newline between messages for clear separation
 		// Except for the last message
@@ -891,6 +900,56 @@ func formatHistoryIntoPrompt(history []interfaces.Message) string {
 	}
 
 	return prompt
+}
+
+// isStructuredJSONResponse checks if a message content is a structured JSON response
+func isStructuredJSONResponse(content string) bool {
+	trimmed := strings.TrimSpace(content)
+	return strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")
+}
+
+// convertToHumanReadable converts a JSON response to a human-readable format
+// to avoid confusing the LLM with raw JSON in conversation history
+func convertToHumanReadable(jsonContent string) string {
+	// Try to parse the JSON to extract key information
+	var jsonMap map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonContent), &jsonMap); err != nil {
+		// If parsing fails, return a generic summary
+		return "[Generated structured response]"
+	}
+
+	// Convert JSON to human-readable format - works with any JSON structure
+	var parts []string
+
+	for key, value := range jsonMap {
+		switch v := value.(type) {
+		case string:
+			if v != "" && v != "null" {
+				parts = append(parts, fmt.Sprintf("%s: %s", key, v))
+			}
+		case []interface{}:
+			if len(v) > 0 {
+				if str, ok := v[0].(string); ok && str != "" {
+					parts = append(parts, fmt.Sprintf("%s: %s", key, str))
+				}
+			}
+		case bool:
+			parts = append(parts, fmt.Sprintf("%s: %t", key, v))
+		case float64, int:
+			parts = append(parts, fmt.Sprintf("%s: %v", key, v))
+		}
+	}
+
+	if len(parts) == 0 {
+		return "[Generated structured response]"
+	}
+
+	// Limit to most important parts to keep summary concise
+	if len(parts) > 3 {
+		parts = parts[:3]
+	}
+
+	return "[AI: " + strings.Join(parts, ", ") + "]"
 }
 
 // ApproveExecutionPlan approves an execution plan for execution
