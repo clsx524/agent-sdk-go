@@ -40,6 +40,9 @@ type LLMConfig struct {
 	Reasoning        string   // Reasoning mode (none, minimal, comprehensive) to control explanation detail
 	EnableReasoning  bool     // Enable native reasoning tokens (Anthropic thinking/OpenAI o1)
 	ReasoningBudget  int      // Optional token budget for reasoning (Anthropic only)
+	MaxCompletionTokens int      // Maximum completion tokens for reasoning models (gpt-5, o1)
+	ReasoningEffort     string   // Reasoning effort for GPT-5: "minimal", "low", "medium", "high"
+	Verbosity          string   // Response verbosity for GPT-5: "low", "medium", "high"
 }
 
 // WithMaxIterations creates a GenerateOption to set the maximum number of tool-calling iterations
@@ -134,5 +137,35 @@ func WithStopSequences(stopSequences []string) GenerateOption {
 func WithResponseFormat(format ResponseFormat) GenerateOption {
 	return func(options *GenerateOptions) {
 		options.ResponseFormat = &format
+	}
+}
+
+// WithMaxCompletionTokens creates a GenerateOption to set the maximum completion tokens for reasoning models
+func WithMaxCompletionTokens(maxTokens int) GenerateOption {
+	return func(options *GenerateOptions) {
+		if options.LLMConfig == nil {
+			options.LLMConfig = &LLMConfig{}
+		}
+		options.LLMConfig.MaxCompletionTokens = maxTokens
+	}
+}
+
+// WithReasoningEffort creates a GenerateOption to set the reasoning effort for GPT-5 models
+func WithReasoningEffort(effort string) GenerateOption {
+	return func(options *GenerateOptions) {
+		if options.LLMConfig == nil {
+			options.LLMConfig = &LLMConfig{}
+		}
+		options.LLMConfig.ReasoningEffort = effort
+	}
+}
+
+// WithVerbosity creates a GenerateOption to set the response verbosity for GPT-5 models
+func WithVerbosity(verbosity string) GenerateOption {
+	return func(options *GenerateOptions) {
+		if options.LLMConfig == nil {
+			options.LLMConfig = &LLMConfig{}
+		}
+		options.LLMConfig.Verbosity = verbosity
 	}
 }

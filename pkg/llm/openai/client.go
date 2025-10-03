@@ -591,6 +591,19 @@ func (c *OpenAIClient) GenerateWithTools(ctx context.Context, prompt string, too
 		req.ParallelToolCalls = openai.Bool(true)
 	}
 
+	// Set reasoning model specific parameters
+	if isReasoningModel(c.Model) {
+		if params.LLMConfig.MaxCompletionTokens > 0 {
+			req.MaxCompletionTokens = openai.Int(int64(params.LLMConfig.MaxCompletionTokens))
+		}
+		if params.LLMConfig.ReasoningEffort != "" {
+			req.ReasoningEffort = openai.ReasoningEffort(params.LLMConfig.ReasoningEffort)
+		}
+		if params.LLMConfig.Verbosity != "" {
+			req.Verbosity = openai.ChatCompletionNewParamsVerbosity(params.LLMConfig.Verbosity)
+		}
+	}
+
 	if len(params.LLMConfig.StopSequences) > 0 {
 		req.Stop = openai.ChatCompletionNewParamsStopUnion{OfStringArray: params.LLMConfig.StopSequences}
 	}
@@ -1011,6 +1024,32 @@ func (c *OpenAIClient) GenerateWithTools(ctx context.Context, prompt string, too
 		PresencePenalty:  openai.Float(params.LLMConfig.PresencePenalty),
 	}
 
+	// Set reasoning model specific parameters for final call
+	if isReasoningModel(c.Model) {
+		if params.LLMConfig.MaxCompletionTokens > 0 {
+			finalReq.MaxCompletionTokens = openai.Int(int64(params.LLMConfig.MaxCompletionTokens))
+		}
+		if params.LLMConfig.ReasoningEffort != "" {
+			finalReq.ReasoningEffort = openai.ReasoningEffort(params.LLMConfig.ReasoningEffort)
+		}
+		if params.LLMConfig.Verbosity != "" {
+			finalReq.Verbosity = openai.ChatCompletionNewParamsVerbosity(params.LLMConfig.Verbosity)
+		}
+	}
+
+	// Set reasoning model specific parameters for final call
+	if isReasoningModel(c.Model) {
+		if params.LLMConfig.MaxCompletionTokens > 0 {
+			finalReq.MaxCompletionTokens = openai.Int(int64(params.LLMConfig.MaxCompletionTokens))
+		}
+		if params.LLMConfig.ReasoningEffort != "" {
+			finalReq.ReasoningEffort = openai.ReasoningEffort(params.LLMConfig.ReasoningEffort)
+		}
+		if params.LLMConfig.Verbosity != "" {
+			finalReq.Verbosity = openai.ChatCompletionNewParamsVerbosity(params.LLMConfig.Verbosity)
+		}
+	}
+
 	// Reasoning models don't support top_p parameter
 	if !isReasoningModel(c.Model) {
 		finalReq.TopP = openai.Float(params.LLMConfig.TopP)
@@ -1133,3 +1172,34 @@ func WithReasoning(reasoning string) interfaces.GenerateOption {
 		options.LLMConfig.Reasoning = reasoning
 	}
 }
+
+// WithMaxCompletionTokens creates a GenerateOption to set the maximum completion tokens for reasoning models
+func WithMaxCompletionTokens(maxTokens int) interfaces.GenerateOption {
+	return func(options *interfaces.GenerateOptions) {
+		if options.LLMConfig == nil {
+			options.LLMConfig = &interfaces.LLMConfig{}
+		}
+		options.LLMConfig.MaxCompletionTokens = maxTokens
+	}
+}
+
+// WithReasoningEffort creates a GenerateOption to set the reasoning effort for GPT-5 models
+func WithReasoningEffort(effort string) interfaces.GenerateOption {
+	return func(options *interfaces.GenerateOptions) {
+		if options.LLMConfig == nil {
+			options.LLMConfig = &interfaces.LLMConfig{}
+		}
+		options.LLMConfig.ReasoningEffort = effort
+	}
+}
+
+// WithVerbosity creates a GenerateOption to set the response verbosity for GPT-5 models
+func WithVerbosity(verbosity string) interfaces.GenerateOption {
+	return func(options *interfaces.GenerateOptions) {
+		if options.LLMConfig == nil {
+			options.LLMConfig = &interfaces.LLMConfig{}
+		}
+		options.LLMConfig.Verbosity = verbosity
+	}
+}
+

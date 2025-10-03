@@ -66,6 +66,7 @@ type AgentStreamEvent struct {
 type AgentEventType string
 
 const (
+	AgentEventStart      AgentEventType = "start"
 	AgentEventContent    AgentEventType = "content"
 	AgentEventThinking   AgentEventType = "thinking"
 	AgentEventToolCall   AgentEventType = "tool_call"
